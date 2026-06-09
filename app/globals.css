@@ -56,6 +56,14 @@
   color: rgb(var(--rgb-ink) / var(--tw-text-opacity, 1)) !important;
 }
 
+/* Accent (yellow) buttons must keep dark teal text in dark mode for contrast.
+   Defined AFTER the text-primary/secondary override above, so for elements
+   with both `bg-accent` and `text-secondary` this rule wins (equal specificity,
+   declared later → cascade picks this one). */
+.dark .bg-accent {
+  color: #2d3a3a !important;
+}
+
 /* In dark mode, form fields are otherwise the same color as their card/modal
    container (bg-primary on bg-primary) and the secondary-tinted border at 25%
    opacity is invisible. Lift the background a touch and brighten the border so

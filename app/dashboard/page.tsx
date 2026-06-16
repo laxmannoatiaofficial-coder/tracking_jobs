@@ -298,6 +298,16 @@ function Dashboard() {
           </motion.button>
         </div>
       </div>
+        {/* Soft fade below the controls bar so cards dissolve into the page
+            background as they scroll up, instead of meeting a hard edge. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-full h-6"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgb(var(--rgb-page) / 1), rgb(var(--rgb-page) / 0))',
+          }}
+        />
       </div>
 
       <main className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">

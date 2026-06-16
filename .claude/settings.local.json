@@ -3,7 +3,26 @@
     "allow": [
       "Bash(npm --version)",
       "PowerShell(node --version)",
-      "PowerShell(npm --version)"
+      "PowerShell(npm --version)",
+      "PowerShell($out = Get-Content \"C:\\\\Users\\\\LAXMAN~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Laxman--Primary--Desktop-Job-Tracker\\\\04ec4ab7-6e03-4fe2-96d1-50ef2381f904\\\\tasks\\\\bof1zo7uq.output\"; \\($out | Select-String -Pattern \"✓ Compiled\" | Select-Object -Last 3 | ForEach-Object { $_.Line }\\); $r = Invoke-WebRequest -Uri \"http://localhost:3000/dashboard\" -UseBasicParsing -TimeoutSec 60; \"dashboard: $\\($r.StatusCode\\)\")",
+      "PowerShell(\\(Get-Content \"C:\\\\Users\\\\LAXMAN~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Laxman--Primary--Desktop-Job-Tracker\\\\04ec4ab7-6e03-4fe2-96d1-50ef2381f904\\\\tasks\\\\bof1zo7uq.output\" | Select-String -Pattern \"Compiled\" | Select-Object -Last 3\\).Line)",
+      "mcp__f4bc8ecb-e545-4820-b52c-f14233a7ee84__list_projects",
+      "mcp__f4bc8ecb-e545-4820-b52c-f14233a7ee84__execute_sql",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\Laxman \\(Primary\\)\\\\Desktop\\\\Job Tracker\"; & \"C:\\\\Users\\\\Laxman \\(Primary\\)\\\\nodejs-portable\\\\node.exe\" \"node_modules\\\\typescript\\\\bin\\\\tsc\" --noEmit 2>&1 | Select-Object -First 15; \"tsc exit: $LASTEXITCODE\"; $conn = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue; if \\($conn\\) { \"server: running\" } else { \"server: not running\" })",
+      "Bash(npm run *)",
+      "mcp__f4bc8ecb-e545-4820-b52c-f14233a7ee84__apply_migration",
+      "mcp__Claude_Preview__preview_start",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\Laxman \\(Primary\\)\\\\Desktop\\\\Job Tracker\"; $conn = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue; if \\($conn\\) { Stop-Process -Id $conn[0].OwningProcess -Force -Confirm:$false; \"stopped dev server\" } else { \"no dev server\" }; Start-Sleep -Seconds 2; Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue; npm run build 2>&1 | Select-Object -Last 30)",
+      "Bash(npm install *)",
+      "mcp__Claude_in_Chrome__list_connected_browsers",
+      "Read(//c/tmp/**)",
+      "Bash(curl -sL -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\)\" \"https://www.acko.com/careers/jobs/\" -o acko.html)",
+      "Bash(curl -sL -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\)\" \"https://careers.kula.ai/acko?jobs=true\" -o kula.html)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"TSC_EXIT=$?\")",
+      "Bash(ls -la .env*)",
+      "Bash(cat .claude/launch.json)",
+      "Bash(git add *)"
     ]
   }
 }

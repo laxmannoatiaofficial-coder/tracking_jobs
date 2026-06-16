@@ -58,7 +58,7 @@
      Accent stays #FFC857. Both surfaces are dark, so text must be light. */
   --rgb-primary: 24 32 32;  /* #182020 — card surface */
   --rgb-secondary: 45 58 58; /* #2D3A3A — chrome surface */
-  --rgb-page: 12 16 16; /* #0C1010 — even deeper than cards, so cards stand out */
+  --rgb-page: 24 32 32; /* #182020 — matches the card/sign-in-form surface (bg-primary) */
   --rgb-footer: 45 58 58; /* #2D3A3A — same as secondary in dark mode */
   /* Text flips to light on dark cards/page. On-dark stays light (chrome was
      always dark anyway). */

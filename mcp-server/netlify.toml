@@ -1,0 +1,18 @@
+# Deploy the MCP server as its OWN Netlify site (separate from the Next.js app).
+# In Netlify: "Add new site" -> point it at this repo -> set "Base directory" to `mcp-server`.
+# Set the SUPABASE_URL and SUPABASE_ANON_KEY environment variables in the site settings.
+
+[build]
+  base = "mcp-server"
+  command = "npm run build"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Let clients POST to a clean `/mcp` URL instead of the raw function path.
+[[redirects]]
+  from = "/mcp"
+  to = "/.netlify/functions/mcp"
+  status = 200
+  force = true

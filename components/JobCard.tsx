@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { JobApplication, JobStatus } from '@/types';
 import { STATUS_OPTIONS } from '@/types';
 import {
@@ -30,17 +30,7 @@ export function JobCard({
   const followUp = getFollowUpState(job.follow_up_date);
   const [statusOpen, setStatusOpen] = useState(false);
   const cardRef = useRef<HTMLElement>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  // Scroll shrink effect as card goes under sticky header (header is ~140px tall)
-  const { scrollYProgress } = useScroll({
-    target: wrapperRef,
-    offset: ['start 160px', 'start 0px'],
-  });
-  
-  const scrollScale = useTransform(scrollYProgress, [0, 1], [1, 0.85]);
-  const scrollOpacity = useTransform(scrollYProgress, [0, 1], [1, 0.3]);
 
   const isPointerInHoverZone = useCallback((x: number, y: number) => {
     const hit = (el: HTMLElement | null, topPad = 0) => {
@@ -105,11 +95,7 @@ export function JobCard({
   };
 
   return (
-    <motion.div 
-      ref={wrapperRef} 
-      style={{ scale: scrollScale, opacity: scrollOpacity, transformOrigin: 'top center' }}
-      className="relative h-full"
-    >
+    <div className="relative h-full">
       <motion.article
         initial={{ opacity: 0, y: 20 }}
         animate={{
@@ -118,8 +104,9 @@ export function JobCard({
           transition: { duration: 0.25, type: 'spring', bounce: 0.1, delay: Math.min(index, 20) * 0.05 },
         }}
         exit={{ opacity: 0, scale: 0.95 }}
-        whileHover={{ scale: 1.015, y: -2 }}
-        transition={{ duration: 0.22, ease: 'easeOut' }}
+        // Acko-style subtle hover: a clean 4px lift, no scale, slow 0.4s `ease`.
+        whileHover={{ y: -4 }}
+        transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
         ref={cardRef as any}
         onClick={() => {
           // While the status dropdown is open, a click on the card only
@@ -143,7 +130,7 @@ export function JobCard({
         tabIndex={0}
         role="button"
         aria-label={`Open details for ${job.company_name} — ${job.role}`}
-        className={`group relative h-full bg-primary rounded-2xl p-5 cursor-pointer transition-[box-shadow,border-color] duration-300 shadow-card-accent hover:shadow-card-accent-hover flex flex-col gap-3 overflow-visible ${
+        className={`group relative h-full bg-primary rounded-2xl p-5 cursor-pointer transition-[box-shadow,border-color] duration-[400ms] ease-[cubic-bezier(0.25,0.1,0.25,1)] shadow-card-accent hover:shadow-card-accent-hover flex flex-col gap-3 overflow-visible ${
           statusOpen ? 'z-30' : ''
         }`}
         style={{
@@ -334,7 +321,7 @@ export function JobCard({
           </div>
       </div>
     </motion.article>
-    </motion.div>
+    </div>
   );
 }
 

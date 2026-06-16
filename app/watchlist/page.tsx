@@ -379,8 +379,9 @@ function CompanyCard({
         },
       }}
       exit={{ opacity: 0, scale: 0.95 }}
-      whileHover={{ scale: 1.03, y: -4 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+      // Acko-style subtle hover: a clean 4px lift, no scale, slow 0.4s `ease`.
+      whileHover={{ y: -4 }}
+      transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
       onClick={() => onOpen(cardRef.current!.getBoundingClientRect())}
       tabIndex={0}
       role="button"
@@ -391,7 +392,7 @@ function CompanyCard({
           onOpen(cardRef.current!.getBoundingClientRect());
         }
       }}
-      className="group relative bg-primary rounded-2xl p-5 cursor-pointer transition-[box-shadow,border-color] duration-300 shadow-card-accent hover:shadow-card-accent-hover flex flex-col gap-3"
+      className="group relative bg-primary rounded-2xl p-5 cursor-pointer transition-[box-shadow,border-color] duration-[400ms] ease-[cubic-bezier(0.25,0.1,0.25,1)] shadow-card-accent hover:shadow-card-accent-hover flex flex-col gap-3"
       style={{
         border: '1px solid rgb(var(--rgb-secondary) / 0.12)',
         borderRadius: 16,

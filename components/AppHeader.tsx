@@ -265,11 +265,8 @@ export function AppHeader() {
                     mass: 0.7,
                   }}
                   role="menu"
-                  className="absolute right-0 mt-2 w-[290px] bg-primary rounded-xl shadow-menu overflow-hidden z-50"
-                  style={{
-                    border: '1px solid rgb(var(--rgb-secondary) / 0.12)',
-                    transformOrigin: 'top right',
-                  }}
+                  className="dropdown-panel absolute right-0 mt-2 w-[290px] rounded-xl overflow-hidden z-50"
+                  style={{ transformOrigin: 'top right' }}
                 >
                   <div
                     className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider"
@@ -353,18 +350,12 @@ export function AppHeader() {
                     mass: 0.7,
                   }}
                   role="menu"
-                  className="absolute right-0 mt-2 min-w-[200px] bg-primary rounded-xl shadow-menu overflow-hidden z-50"
-                  style={{
-                    border: '1px solid rgb(var(--rgb-secondary) / 0.12)',
-                    transformOrigin: 'top right',
-                  }}
+                  className="dropdown-panel absolute right-0 mt-2 min-w-[200px] rounded-xl overflow-hidden z-50"
+                  style={{ transformOrigin: 'top right' }}
                 >
                   {/* Appearance toggle */}
                   <div className="flex items-center justify-between px-4 py-2.5">
-                    <span
-                      className="text-sm font-medium"
-                      style={{ color: 'var(--color-secondary)' }}
-                    >
+                    <span className="text-sm font-medium text-secondary">
                       Dark mode
                     </span>
                     <button
@@ -444,8 +435,10 @@ function MenuItem({
       type="button"
       role="menuitem"
       onClick={onClick}
-      className="w-full text-left px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent/20"
-      style={{ color: tone === 'danger' ? '#dc2626' : 'var(--color-secondary)' }}
+      className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent/20 ${
+        tone === 'danger' ? '' : 'text-secondary'
+      }`}
+      style={tone === 'danger' ? { color: '#dc2626' } : undefined}
     >
       {children}
     </button>

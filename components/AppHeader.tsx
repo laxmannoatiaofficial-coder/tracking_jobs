@@ -164,7 +164,7 @@ export function AppHeader() {
 
   return (
     <div className="bg-secondary">
-      <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-10 min-h-20 py-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-10 min-h-20 py-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
         {/* Brand */}
         <Link
           href="/dashboard"

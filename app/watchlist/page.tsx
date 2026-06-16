@@ -178,7 +178,7 @@ function Watchlist() {
 
         {/* Controls bar */}
         <div className="bg-page">
-        <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-10 py-3 flex flex-wrap items-center gap-3">
+        <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-10 py-3 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar p-1 -m-1">
             {(['All', 'Company', 'Job'] as (WatchlistKind | 'All')[]).map(
               (k) => (
@@ -248,9 +248,9 @@ function Watchlist() {
       </div>
       </div>
 
-      <main className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
+      <main className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
         {loading ? (
-          <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid gap-5 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
@@ -297,7 +297,7 @@ function Watchlist() {
           <motion.div
             layout
             key={kindFilter}
-            className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 animate-grid-fade"
+            className="grid gap-5 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 animate-grid-fade"
           >
             <AnimatePresence mode="popLayout">
               {visible.map((c, idx) => (

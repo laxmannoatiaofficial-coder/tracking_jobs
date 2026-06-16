@@ -251,7 +251,7 @@ function Dashboard() {
 
         {/* Controls bar */}
         <div className="bg-page">
-        <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-10 py-3 flex flex-wrap items-center gap-3">
+        <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-10 py-3 flex flex-wrap items-center gap-3">
           <StatusTabs jobs={jobs} active={filter} onChange={setFilter} />
           <SortControl value={sort} onChange={setSort} />
 
@@ -300,9 +300,9 @@ function Dashboard() {
       </div>
       </div>
 
-      <main className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
+      <main className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
         {loading ? (
-          <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid gap-5 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             <SkeletonCard />
             <SkeletonCard />
             <SkeletonCard />
@@ -325,7 +325,7 @@ function Dashboard() {
           <motion.div
             layout
             key={`${filter}-${sort}-${search}`}
-            className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 animate-grid-fade"
+            className="grid gap-5 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 animate-grid-fade"
           >
             <AnimatePresence mode="popLayout">
             {visibleJobs.map((job, idx) => (

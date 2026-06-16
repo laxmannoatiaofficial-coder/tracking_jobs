@@ -61,10 +61,10 @@ const config: Config = {
       boxShadow: {
         card: '0 4px 20px rgb(var(--rgb-secondary) / 0.08)',
         'card-hover': '0 8px 30px rgb(var(--rgb-secondary) / 0.14)',
-        'card-accent':
-          '0 4px 20px rgb(var(--rgb-secondary) / 0.08), inset 4px 0 0 0 #FFC857',
-        'card-accent-hover':
-          '0 8px 30px rgb(var(--rgb-secondary) / 0.14), inset 4px 0 0 0 #FFC857',
+        // Theme-aware layered elevation — definitions live in globals.css
+        // (:root and .dark) so dark mode can swap to black-based shadows.
+        'card-accent': 'var(--shadow-card-accent)',
+        'card-accent-hover': 'var(--shadow-card-accent-hover)',
         modal: '0 20px 60px rgb(var(--rgb-secondary) / 0.25)',
         menu: '0 8px 24px rgb(var(--rgb-secondary) / 0.15)',
       },

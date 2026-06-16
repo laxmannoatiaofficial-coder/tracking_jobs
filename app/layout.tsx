@@ -17,7 +17,7 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'Job Tracker',
+  title: 'Trackitt',
   description: 'Track every application. Land the right role.',
 };
 

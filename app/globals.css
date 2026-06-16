@@ -27,6 +27,28 @@
   --color-ink: rgb(var(--rgb-ink));
   --color-on-dark: rgb(var(--rgb-on-dark));
   --color-accent: #ffc857;
+  /* Form inputs — a touch greyer than card surfaces so fields read clearly */
+  --rgb-field: 235 238 240; /* #EBEEF0 */
+  /* Floating dropdown panels — lifted above card/modal surfaces */
+  --rgb-dropdown: 255 255 255;
+  --dropdown-border-color: rgb(var(--rgb-secondary) / 0.12);
+  --dropdown-shadow: 0 8px 24px rgb(var(--rgb-secondary) / 0.15);
+  --dropdown-divider: rgb(var(--rgb-secondary) / 0.08);
+  /* Layered card elevation — swapped in .dark because teal-tinted shadows
+     disappear on the near-black page; dark mode needs pure black + a
+     stronger top highlight instead. */
+  --shadow-card-accent:
+    0 1px 2px rgb(var(--rgb-secondary) / 0.10),
+    0 4px 12px rgb(var(--rgb-secondary) / 0.10),
+    0 14px 32px rgb(var(--rgb-secondary) / 0.12),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.07),
+    inset 4px 0 0 0 #ffc857;
+  --shadow-card-accent-hover:
+    0 2px 4px rgb(var(--rgb-secondary) / 0.12),
+    0 10px 24px rgb(var(--rgb-secondary) / 0.16),
+    0 24px 56px rgb(var(--rgb-secondary) / 0.20),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.07),
+    inset 4px 0 0 0 #ffc857;
 }
 
 .dark {
@@ -42,6 +64,25 @@
      always dark anyway). */
   --rgb-ink: 244 246 248;
   --rgb-on-dark: 244 246 248;
+  /* Dropdowns sit on #182020 cards — use the lighter chrome tone so lists pop */
+  --rgb-dropdown: 45 58 58;
+  --dropdown-border-color: rgb(244 246 248 / 0.14);
+  --dropdown-shadow:
+    0 16px 40px rgb(0 0 0 / 0.55),
+    0 0 0 1px rgb(244 246 248 / 0.07);
+  --dropdown-divider: rgb(244 246 248 / 0.1);
+  --shadow-card-accent:
+    0 1px 2px rgb(0 0 0 / 0.40),
+    0 4px 12px rgb(0 0 0 / 0.45),
+    0 14px 32px rgb(0 0 0 / 0.50),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.10),
+    inset 4px 0 0 0 #ffc857;
+  --shadow-card-accent-hover:
+    0 2px 4px rgb(0 0 0 / 0.45),
+    0 10px 24px rgb(0 0 0 / 0.55),
+    0 24px 56px rgb(0 0 0 / 0.60),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.13),
+    inset 4px 0 0 0 #ffc857;
 }
 
 /* In dark mode, every `text-primary`, `text-secondary`, and their opacity
@@ -64,20 +105,69 @@
   color: #2d3a3a !important;
 }
 
+/* Form fields: subtle grey fill so inputs stand out from bg-primary surfaces */
+input:not([type='checkbox']):not([type='radio']):not([type='file']),
+select,
+textarea,
+.form-field {
+  background-color: rgb(var(--rgb-field));
+}
+
 /* In dark mode, form fields are otherwise the same color as their card/modal
    container (bg-primary on bg-primary) and the secondary-tinted border at 25%
    opacity is invisible. Lift the background a touch and brighten the border so
    each field is clearly an input. */
 .dark input:not([type='checkbox']):not([type='radio']):not([type='file']),
 .dark select,
-.dark textarea {
+.dark textarea,
+.dark .form-field {
   background-color: rgb(255 255 255 / 0.04);
   border-color: rgb(244 246 248 / 0.18);
 }
 .dark input:not([type='checkbox']):not([type='radio']):not([type='file']):focus,
 .dark select:focus,
-.dark textarea:focus {
+.dark textarea:focus,
+.dark .form-field:focus {
   border-color: var(--color-accent);
+}
+/* Mirror the hover accent border (hover:border-accent) — without this, the
+   higher-specificity .dark border override above swallows the hover state. */
+.dark input:not([type='checkbox']):not([type='radio']):not([type='file']):hover,
+.dark select:hover,
+.dark textarea:hover,
+.dark .form-field:hover {
+  border-color: var(--color-accent);
+}
+
+/* Portaled select / combobox lists */
+.dropdown-panel {
+  background-color: rgb(var(--rgb-dropdown));
+  border: 1px solid var(--dropdown-border-color);
+  box-shadow: var(--dropdown-shadow);
+}
+
+.dropdown-panel [role='option'] + [role='option'],
+.dropdown-panel [role='menuitem'] + [role='menuitem'] {
+  border-top: 1px solid var(--dropdown-divider);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Apple-style continuous corner curvature (G2/G3 "squircle" corners).
+   `corner-shape` blends each corner's curve smoothly into the straight
+   edges instead of the abrupt arc-to-line transition of plain border-radius.
+   Progressive enhancement: browsers without support keep regular rounding.
+   Perfect circles / capsule pills (rounded-full) are excluded — those should
+   remain true circles, as in Apple's own design language.
+   ────────────────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  corner-shape: squircle;
+}
+.rounded-full,
+.rounded-t-full,
+.rounded-b-full {
+  corner-shape: round;
 }
 
 html,
@@ -117,32 +207,52 @@ input[type='date']::-webkit-calendar-picker-indicator {
   background: rgb(var(--rgb-secondary) / 0.35);
 }
 
+/* Hide scrollbar completely for specific elements */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
    Status badges — soft tints in light mode, brighter tints in dark mode
    so they remain legible on the deep #182020 / #2D3A3A surfaces.
    ────────────────────────────────────────────────────────────────────────── */
-.badge-applied { background: rgba(29, 78, 216, 0.12); color: #1d4ed8; }
-.badge-shortlisted { background: rgba(217, 119, 6, 0.14); color: #b45309; }
-.badge-interviewing { background: rgba(124, 58, 237, 0.14); color: #6d28d9; }
-.badge-offered { background: rgba(22, 163, 74, 0.14); color: #15803d; }
-.badge-rejected { background: rgba(220, 38, 38, 0.12); color: #b91c1c; }
-.badge-ghosted { background: rgba(71, 85, 105, 0.14); color: #475569; }
+.badge-applied { background: rgba(29, 78, 216, 0.15); color: #1e3a8a; }
+.badge-shortlisted { background: rgba(217, 119, 6, 0.15); color: #78350f; }
+.badge-interviewing { background: rgba(124, 58, 237, 0.15); color: #4c1d95; }
+.badge-offered { background: rgba(22, 163, 74, 0.15); color: #14532d; }
+.badge-rejected { background: rgba(220, 38, 38, 0.15); color: #7f1d1d; }
+.badge-ghosted { background: rgba(71, 85, 105, 0.15); color: #0f172a; }
 
 /* Brighter variants apply when the badge sits on a dark surface — either
    anywhere in dark mode, or inside a `.bg-secondary` container in light mode
    (e.g. the dark teal modal header). */
 .dark .badge-applied,
-.bg-secondary .badge-applied { background: rgba(96, 165, 250, 0.22); color: #bfdbfe; }
+.bg-secondary .badge-applied { background: rgba(59, 130, 246, 0.35); color: #ffffff; }
 .dark .badge-shortlisted,
-.bg-secondary .badge-shortlisted { background: rgba(251, 191, 36, 0.22); color: #fde68a; }
+.bg-secondary .badge-shortlisted { background: rgba(245, 158, 11, 0.35); color: #ffffff; }
 .dark .badge-interviewing,
-.bg-secondary .badge-interviewing { background: rgba(167, 139, 250, 0.22); color: #ddd6fe; }
+.bg-secondary .badge-interviewing { background: rgba(139, 92, 246, 0.35); color: #ffffff; }
 .dark .badge-offered,
-.bg-secondary .badge-offered { background: rgba(74, 222, 128, 0.22); color: #bbf7d0; }
+.bg-secondary .badge-offered { background: rgba(34, 197, 94, 0.35); color: #ffffff; }
 .dark .badge-rejected,
-.bg-secondary .badge-rejected { background: rgba(248, 113, 113, 0.22); color: #fecaca; }
+.bg-secondary .badge-rejected { background: rgba(239, 68, 68, 0.35); color: #ffffff; }
 .dark .badge-ghosted,
-.bg-secondary .badge-ghosted { background: rgba(148, 163, 184, 0.22); color: #cbd5e1; }
+.bg-secondary .badge-ghosted { background: rgba(100, 116, 139, 0.35); color: #ffffff; }
+
+/* Dropdown panels are white in light mode, but can sit inside a dark
+   .bg-secondary container (e.g. the card header's status menu) — which would
+   wrongly trigger the bright dark-surface badge variants above. Restore the
+   base palette there; scoped to light mode since dark panels are dark teal. */
+html:not(.dark) .dropdown-panel .badge-applied { background: rgba(29, 78, 216, 0.15); color: #1e3a8a; }
+html:not(.dark) .dropdown-panel .badge-shortlisted { background: rgba(217, 119, 6, 0.15); color: #78350f; }
+html:not(.dark) .dropdown-panel .badge-interviewing { background: rgba(124, 58, 237, 0.15); color: #4c1d95; }
+html:not(.dark) .dropdown-panel .badge-offered { background: rgba(22, 163, 74, 0.15); color: #14532d; }
+html:not(.dark) .dropdown-panel .badge-rejected { background: rgba(220, 38, 38, 0.15); color: #7f1d1d; }
+html:not(.dark) .dropdown-panel .badge-ghosted { background: rgba(71, 85, 105, 0.15); color: #0f172a; }
 
 /* Shimmer for skeletons */
 .shimmer-bg {

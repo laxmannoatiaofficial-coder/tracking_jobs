@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type {
+  CompensationPeriod,
   JobApplication,
   JobInput,
   JobStatus,
@@ -9,6 +10,7 @@ import type {
   RoleType,
 } from '@/types';
 import {
+  COMPENSATION_PERIOD_OPTIONS,
   LOCATION_TYPE_OPTIONS,
   ROLE_TYPE_OPTIONS,
   STATUS_OPTIONS,
@@ -16,10 +18,14 @@ import {
 import { todayIso } from '@/utils/helpers';
 import { CityCombobox } from './CityCombobox';
 import { Modal } from './Modal';
+import { optionsFrom, SelectField } from './SelectField';
 
 interface AddJobModalProps {
   open: boolean;
   initialJob: JobApplication | null;
+  /** Optional partial values for add mode (e.g. promoting a watchlist company). */
+  prefill?: Partial<JobInput> | null;
+  originRect?: DOMRect | null;
   onClose: () => void;
   onSave: (
     data: JobInput,
@@ -39,6 +45,7 @@ interface FormState {
   location_type: LocationType;
   location_city: string;
   ctc: string;
+  compensation_period: CompensationPeriod;
   jd_url: string;
   jd_text: string;
   jd_file_name: string; // local-only display label for uploaded JD doc
@@ -62,6 +69,7 @@ function emptyForm(): FormState {
     location_type: 'Remote',
     location_city: '',
     ctc: '',
+    compensation_period: 'Annual',
     jd_url: '',
     jd_text: '',
     jd_file_name: '',
@@ -87,6 +95,8 @@ function jobToForm(job: JobApplication): FormState {
     location_type: job.location_type,
     location_city: job.location_city ?? '',
     ctc: job.ctc ?? '',
+    compensation_period:
+      job.compensation_period === 'Monthly' ? 'Monthly' : 'Annual',
     jd_url: job.jd_url ?? '',
     jd_text: job.jd_text ?? '',
     jd_file_name: '',
@@ -100,6 +110,8 @@ function jobToForm(job: JobApplication): FormState {
 export function AddJobModal({
   open,
   initialJob,
+  prefill,
+  originRect,
   onClose,
   onSave,
 }: AddJobModalProps) {
@@ -124,7 +136,23 @@ export function AddJobModal({
 
   useEffect(() => {
     if (open) {
-      setForm(initialJob ? jobToForm(initialJob) : emptyForm());
+      setForm(
+        initialJob
+          ? jobToForm(initialJob)
+          : {
+              ...emptyForm(),
+              // Only the fields a watchlist promotion can carry over.
+              company_name: prefill?.company_name ?? '',
+              role: prefill?.role ?? '',
+              industry: prefill?.industry ?? '',
+              jd_url: prefill?.jd_url ?? '',
+              personal_note: prefill?.personal_note ?? '',
+              ...(prefill?.location_type
+                ? { location_type: prefill.location_type }
+                : {}),
+              location_city: prefill?.location_city ?? '',
+            },
+      );
       setPendingFile(null);
       setErrors({});
       setResumeError('');
@@ -143,14 +171,14 @@ export function AddJobModal({
       setJdError('');
       if (initialJob?.jd_text) {
         setJdMode('text');
-      } else if (initialJob?.jd_url) {
+      } else if (initialJob?.jd_url || (!initialJob && prefill?.jd_url)) {
         setJdMode('url');
       } else {
         setJdMode('idle');
       }
       setTimeout(() => firstFieldRef.current?.focus(), 50);
     }
-  }, [open, initialJob]);
+  }, [open, initialJob, prefill]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -217,6 +245,12 @@ export function AddJobModal({
           status: form.status,
           date_of_application: form.date_of_application,
           follow_up_date: form.follow_up_date,
+          // Rescheduling (or adding) a follow-up makes it pending again;
+          // an unchanged date keeps its done state.
+          follow_up_done:
+            initialJob && initialJob.follow_up_date === form.follow_up_date
+              ? initialJob.follow_up_done
+              : false,
           role_type: form.role_type,
           location_type: form.location_type,
           location_city:
@@ -225,6 +259,9 @@ export function AddJobModal({
               ? form.location_city.trim()
               : '',
           ctc: form.ctc.trim(),
+          compensation_period: form.ctc.trim()
+            ? form.compensation_period
+            : '',
           jd_url: jdUrl,
           jd_text: jdText,
           resume_file_name: resumeFileName,
@@ -234,6 +271,7 @@ export function AddJobModal({
         pendingFile,
         pendingJdFile,
       );
+      setSaving(false);
     } catch (err) {
       setSaving(false);
       const msg =
@@ -329,6 +367,7 @@ export function AddJobModal({
       onClose={onClose}
       labelledBy="add-modal-title"
       widthClass="max-w-2xl"
+      originRect={originRect}
     >
       <form onSubmit={handleSubmit} className="flex flex-col max-h-[90vh]">
         <header className="flex items-center justify-between p-5 bg-secondary rounded-t-3xl">
@@ -342,7 +381,7 @@ export function AddJobModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-2 rounded-full hover:bg-accent/25 transition-colors"
+            className="p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110 transition-all duration-200 ease-out"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path
@@ -387,17 +426,13 @@ export function AddJobModal({
             </Field>
 
             <Field label="Status" required>
-              <select
+              <SelectField
                 value={form.status}
-                onChange={(e) => set('status', e.target.value as JobStatus)}
+                onChange={(v) => set('status', v)}
+                options={optionsFrom(STATUS_OPTIONS)}
                 className={selectClass}
-              >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+                aria-label="Status"
+              />
             </Field>
 
             <Field
@@ -423,33 +458,27 @@ export function AddJobModal({
             </Field>
 
             <Field label="Type of Role" required>
-              <select
+              <SelectField
                 value={form.role_type}
-                onChange={(e) => set('role_type', e.target.value as RoleType)}
+                onChange={(v) => set('role_type', v)}
+                options={optionsFrom(
+                  initialJob?.role_type === 'Contract'
+                    ? ([...ROLE_TYPE_OPTIONS, 'Contract'] as RoleType[])
+                    : ROLE_TYPE_OPTIONS,
+                )}
                 className={selectClass}
-              >
-                {ROLE_TYPE_OPTIONS.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
+                aria-label="Type of role"
+              />
             </Field>
 
             <Field label="Location Type" required>
-              <select
+              <SelectField
                 value={form.location_type}
-                onChange={(e) =>
-                  set('location_type', e.target.value as LocationType)
-                }
+                onChange={(v) => set('location_type', v)}
+                options={optionsFrom(LOCATION_TYPE_OPTIONS)}
                 className={selectClass}
-              >
-                {LOCATION_TYPE_OPTIONS.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
-                  </option>
-                ))}
-              </select>
+                aria-label="Location type"
+              />
             </Field>
 
             <div
@@ -467,14 +496,23 @@ export function AddJobModal({
               </Field>
             </div>
 
-            <Field label="CTC Offered">
-              <input
-                type="text"
-                value={form.ctc}
-                onChange={(e) => set('ctc', e.target.value)}
-                className={inputClass}
-                placeholder='e.g. "12 LPA", "Not disclosed"'
-              />
+            <Field label="Compensation" full>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={form.ctc}
+                  onChange={(e) => set('ctc', e.target.value)}
+                  className={`${inputClass} flex-1 min-w-0`}
+                  placeholder='e.g. "12 LPA", "₹50,000", "Not disclosed"'
+                />
+                <SelectField
+                  value={form.compensation_period}
+                  onChange={(v) => set('compensation_period', v)}
+                  options={optionsFrom(COMPENSATION_PERIOD_OPTIONS)}
+                  className={`${inputClass} sm:w-36 shrink-0`}
+                  aria-label="Compensation period"
+                />
+              </div>
             </Field>
 
             <Field label="Job Description" full error={jdError}>
@@ -492,7 +530,7 @@ export function AddJobModal({
                   <button
                     type="button"
                     onClick={() => setJdMode('url')}
-                    className="flex items-center justify-center w-11 h-11 rounded-xl transition-all duration-200 ease-out hover:scale-[1.05]"
+                    className="flex items-center justify-center w-11 h-11 rounded-xl border border-transparent hover:border-accent transition-all duration-200 ease-out hover:scale-[1.05]"
                     style={{ background: 'rgba(255, 200, 87, 0.3)' }}
                     title="Paste a URL"
                     aria-label="Paste a URL"
@@ -502,7 +540,7 @@ export function AddJobModal({
                   <button
                     type="button"
                     onClick={() => setJdMode('text')}
-                    className="flex items-center justify-center w-11 h-11 rounded-xl transition-all duration-200 ease-out hover:scale-[1.05]"
+                    className="flex items-center justify-center w-11 h-11 rounded-xl border border-transparent hover:border-accent transition-all duration-200 ease-out hover:scale-[1.05]"
                     style={{ background: 'rgba(255, 200, 87, 0.3)' }}
                     title="Paste JD text"
                     aria-label="Paste JD text"
@@ -510,7 +548,7 @@ export function AddJobModal({
                     <TextIcon />
                   </button>
                   <label
-                    className="flex items-center justify-center w-11 h-11 rounded-xl cursor-pointer transition-all duration-200 ease-out hover:scale-[1.05]"
+                    className="flex items-center justify-center w-11 h-11 rounded-xl cursor-pointer border border-transparent hover:border-accent transition-all duration-200 ease-out hover:scale-[1.05]"
                     style={{ background: 'rgba(255, 200, 87, 0.3)' }}
                     title="Upload document (max 5MB)"
                     aria-label="Upload document"
@@ -539,8 +577,7 @@ export function AddJobModal({
                   <button
                     type="button"
                     onClick={clearJd}
-                    className="shrink-0 flex items-center justify-center w-10 rounded-xl transition-colors hover:bg-accent/25"
-                    style={{ border: '1px solid rgb(var(--rgb-secondary) / 0.25)' }}
+                    className="shrink-0 flex items-center justify-center w-10 rounded-xl border border-[rgb(var(--rgb-secondary)_/_0.25)] hover:border-accent hover:bg-accent/25 hover:scale-[1.05] transition-all duration-200 ease-out"
                     title="Cancel"
                     aria-label="Cancel"
                   >
@@ -562,7 +599,7 @@ export function AddJobModal({
                   <button
                     type="button"
                     onClick={clearJd}
-                    className="text-xs font-semibold px-3 py-1 rounded-full transition-colors hover:bg-accent/25"
+                    className="text-xs font-semibold px-3 py-1 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-[1.08] transition-all duration-200 ease-out"
                     style={{ color: '#dc2626' }}
                   >
                     Clear and start over
@@ -572,8 +609,7 @@ export function AddJobModal({
 
               {jdMode === 'file' && (
                 <div
-                  className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl"
-                  style={{ border: '1px solid rgb(var(--rgb-secondary) / 0.25)' }}
+                  className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-[rgb(var(--rgb-secondary)_/_0.25)] hover:border-accent hover:scale-[1.02] transition-all duration-200 ease-out"
                 >
                   <span className="text-sm text-secondary truncate flex items-center gap-2">
                     {pendingJdFile && (
@@ -586,7 +622,7 @@ export function AddJobModal({
                   </span>
                   <div className="flex items-center gap-2 shrink-0">
                     <label
-                      className="text-xs cursor-pointer px-2 py-1 rounded-full transition-colors hover:bg-accent/25 font-semibold"
+                      className="inline-block text-xs cursor-pointer px-2 py-1 rounded-full border border-transparent hover:border-accent transition-all duration-200 ease-out hover:bg-accent/25 hover:scale-[1.08] font-semibold"
                       style={{ color: 'var(--color-ink)' }}
                     >
                       Replace
@@ -600,7 +636,7 @@ export function AddJobModal({
                     <button
                       type="button"
                       onClick={clearJd}
-                      className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-accent/25 font-semibold"
+                      className="text-xs px-2 py-1 rounded-full border border-transparent hover:border-accent transition-all duration-200 ease-out hover:bg-accent/25 hover:scale-[1.08] font-semibold"
                       style={{ color: '#dc2626' }}
                       title="Remove (and switch input option)"
                     >
@@ -624,7 +660,7 @@ export function AddJobModal({
                     Add your resume:
                   </span>
                   <label
-                    className="flex items-center justify-center w-11 h-11 rounded-xl cursor-pointer transition-all duration-200 ease-out hover:scale-[1.05]"
+                    className="flex items-center justify-center w-11 h-11 rounded-xl cursor-pointer border border-transparent hover:border-accent transition-all duration-200 ease-out hover:scale-[1.05]"
                     style={{ background: 'rgba(255, 200, 87, 0.3)' }}
                     title="Upload PDF (max 5MB)"
                     aria-label="Upload PDF"
@@ -640,7 +676,7 @@ export function AddJobModal({
                   <button
                     type="button"
                     onClick={() => setResumeMode('link')}
-                    className="flex items-center justify-center w-11 h-11 rounded-xl transition-all duration-200 ease-out hover:scale-[1.05]"
+                    className="flex items-center justify-center w-11 h-11 rounded-xl border border-transparent hover:border-accent transition-all duration-200 ease-out hover:scale-[1.05]"
                     style={{ background: 'rgba(255, 200, 87, 0.3)' }}
                     title="Paste a link"
                     aria-label="Paste a link"
@@ -652,8 +688,7 @@ export function AddJobModal({
 
               {resumeMode === 'file' && (
                 <div
-                  className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl"
-                  style={{ border: '1px solid rgb(var(--rgb-secondary) / 0.25)' }}
+                  className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-[rgb(var(--rgb-secondary)_/_0.25)] hover:border-accent hover:scale-[1.02] transition-all duration-200 ease-out"
                 >
                   <span className="text-sm text-secondary truncate flex items-center gap-2">
                     {pendingFile && (
@@ -665,7 +700,7 @@ export function AddJobModal({
                   </span>
                   <div className="flex items-center gap-2 shrink-0">
                     <label
-                      className="text-xs cursor-pointer px-2 py-1 rounded-full transition-colors hover:bg-accent/25 font-semibold"
+                      className="inline-block text-xs cursor-pointer px-2 py-1 rounded-full border border-transparent hover:border-accent transition-all duration-200 ease-out hover:bg-accent/25 hover:scale-[1.08] font-semibold"
                       style={{ color: 'var(--color-ink)' }}
                     >
                       Replace
@@ -679,7 +714,7 @@ export function AddJobModal({
                     <button
                       type="button"
                       onClick={clearResume}
-                      className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-accent/25 font-semibold"
+                      className="text-xs px-2 py-1 rounded-full border border-transparent hover:border-accent transition-all duration-200 ease-out hover:bg-accent/25 hover:scale-[1.08] font-semibold"
                       style={{ color: '#dc2626' }}
                       title="Remove (and switch to link option)"
                     >
@@ -702,8 +737,7 @@ export function AddJobModal({
                   <button
                     type="button"
                     onClick={clearLink}
-                    className="shrink-0 flex items-center justify-center w-10 rounded-xl transition-colors hover:bg-accent/25"
-                    style={{ border: '1px solid rgb(var(--rgb-secondary) / 0.25)' }}
+                    className="shrink-0 flex items-center justify-center w-10 rounded-xl border border-[rgb(var(--rgb-secondary)_/_0.25)] hover:border-accent hover:bg-accent/25 hover:scale-[1.05] transition-all duration-200 ease-out"
                     title="Cancel (back to upload option)"
                     aria-label="Cancel link"
                   >
@@ -748,11 +782,8 @@ export function AddJobModal({
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-50"
-            style={{
-              border: '1px solid rgb(var(--rgb-secondary) / 0.4)',
-              color: 'var(--color-ink)',
-            }}
+            className="px-4 py-2 rounded-full text-sm font-semibold border border-[rgb(var(--rgb-secondary)_/_0.4)] hover:border-accent hover:scale-[1.05] transition-all duration-200 ease-out disabled:opacity-50 disabled:hover:scale-100"
+            style={{ color: 'var(--color-ink)' }}
           >
             Cancel
           </button>
@@ -780,9 +811,9 @@ export function AddJobModal({
 }
 
 const inputClass =
-  'w-full bg-primary text-secondary text-sm rounded-xl px-3 py-2 border border-[rgb(var(--rgb-secondary)_/_0.25)] focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 transition-colors';
+  'w-full bg-primary text-secondary text-sm rounded-xl px-3 py-2 border border-[rgb(var(--rgb-secondary)_/_0.25)] hover:border-accent hover:scale-[1.02] focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 transition-all duration-200 ease-out';
 
-const selectClass = `${inputClass} cursor-pointer pr-8 appearance-none`;
+const selectClass = inputClass;
 
 function Field({
   label,
@@ -824,14 +855,14 @@ function UploadIcon() {
     >
       <path
         d="M10 13V4M10 4l-3.5 3.5M10 4l3.5 3.5"
-        stroke="var(--color-secondary)"
+        stroke="var(--color-ink)"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M3.5 13v2a2 2 0 002 2h9a2 2 0 002-2v-2"
-        stroke="var(--color-secondary)"
+        stroke="var(--color-ink)"
         strokeWidth="1.6"
         strokeLinecap="round"
       />
@@ -850,7 +881,7 @@ function TextIcon() {
     >
       <path
         d="M4 5h12M4 9h12M4 13h8M4 17h6"
-        stroke="var(--color-secondary)"
+        stroke="var(--color-ink)"
         strokeWidth="1.6"
         strokeLinecap="round"
       />
@@ -869,14 +900,14 @@ function LinkIcon() {
     >
       <path
         d="M8.5 11.5a3 3 0 004.24 0l2.5-2.5a3 3 0 10-4.24-4.24L9.5 6.27"
-        stroke="var(--color-secondary)"
+        stroke="var(--color-ink)"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M11.5 8.5a3 3 0 00-4.24 0l-2.5 2.5a3 3 0 104.24 4.24L10.5 13.73"
-        stroke="var(--color-secondary)"
+        stroke="var(--color-ink)"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -896,7 +927,7 @@ function XIcon() {
     >
       <path
         d="M3.5 3.5l9 9M12.5 3.5l-9 9"
-        stroke="var(--color-secondary)"
+        stroke="var(--color-ink)"
         strokeWidth="1.6"
         strokeLinecap="round"
       />

@@ -79,7 +79,7 @@ export function DeleteAccountModal({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           autoComplete="off"
-          className="w-full bg-primary text-secondary text-sm rounded-xl px-3 py-2 border border-[rgb(var(--rgb-secondary)_/_0.25)] focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
+          className="w-full bg-primary text-secondary text-sm rounded-xl px-3 py-2 border border-[rgb(var(--rgb-secondary)_/_0.25)] hover:border-accent hover:scale-[1.02] focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 transition-all duration-200 ease-out"
         />
         {error && (
           <p
@@ -95,11 +95,8 @@ export function DeleteAccountModal({
             type="button"
             onClick={onCancel}
             disabled={submitting}
-            className="px-4 py-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-50"
-            style={{
-              border: '1px solid rgb(var(--rgb-secondary) / 0.4)',
-              color: 'var(--color-ink)',
-            }}
+            className="px-4 py-2 rounded-full text-sm font-semibold border border-[rgb(var(--rgb-secondary)_/_0.4)] hover:border-accent hover:scale-[1.05] transition-all duration-200 ease-out disabled:opacity-50 disabled:hover:scale-100"
+            style={{ color: 'var(--color-ink)' }}
           >
             Cancel
           </button>
@@ -107,7 +104,7 @@ export function DeleteAccountModal({
             type="button"
             onClick={handleConfirm}
             disabled={!canConfirm}
-            className="px-4 py-2 rounded-full text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 rounded-full text-sm font-semibold text-white border border-transparent hover:border-accent hover:opacity-90 hover:scale-[1.05] transition-all duration-200 ease-out disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
             style={{ background: '#dc2626' }}
           >
             {submitting && (

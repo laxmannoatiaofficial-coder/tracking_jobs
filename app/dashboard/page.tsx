@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import type {
   JobApplication,
   JobInput,
@@ -11,8 +10,8 @@ import type {
 } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { useJobs } from '@/hooks/useJobs';
-import { useTheme } from '@/hooks/useTheme';
 import AuthGuard from '@/components/AuthGuard';
+import { AppHeader } from '@/components/AppHeader';
 import { JobCard } from '@/components/JobCard';
 import { StatusTabs } from '@/components/StatusTabs';
 import { SortControl } from '@/components/SortControl';
@@ -20,17 +19,15 @@ import { EmptyState } from '@/components/EmptyState';
 import { AddJobModal } from '@/components/AddJobModal';
 import { JobDetailModal } from '@/components/JobDetailModal';
 import { DeleteConfirmModal } from '@/components/DeleteConfirmModal';
-import { DeleteAccountModal } from '@/components/DeleteAccountModal';
 import { SkeletonCard } from '@/components/SkeletonCard';
-import { truncateMiddle } from '@/utils/helpers';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type ModalState =
   | { kind: 'closed' }
-  | { kind: 'add' }
+  | { kind: 'add'; originRect?: DOMRect }
   | { kind: 'edit'; job: JobApplication }
-  | { kind: 'detail'; job: JobApplication; focusJd?: boolean }
-  | { kind: 'delete'; job: JobApplication }
-  | { kind: 'delete-account' };
+  | { kind: 'detail'; job: JobApplication; focusJd?: boolean; originRect: DOMRect | null }
+  | { kind: 'delete'; job: JobApplication };
 
 interface Toast {
   id: number;
@@ -47,9 +44,7 @@ export default function DashboardPage() {
 }
 
 function Dashboard() {
-  const router = useRouter();
-  const { user, signOut, deleteAccount } = useAuth();
-  const { theme, toggle: toggleTheme } = useTheme();
+  const { user } = useAuth();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const pushToast = (message: string, tone: 'error' | 'info' = 'info') => {
     const id = Date.now() + Math.random();
@@ -74,9 +69,54 @@ function Dashboard() {
   const [sort, setSort] = useState<SortOption>('date-desc');
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState<ModalState>({ kind: 'closed' });
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [promotePrefill, setPromotePrefill] = useState<Partial<JobInput> | null>(null);
+  // Job id the notification bell asked us to open (resolved once jobs load).
+  const [pendingOpenId, setPendingOpenId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // A company promoted from the Watchlist lands here via sessionStorage —
+  // open the Add Application modal pre-filled with its details.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('trackitt-promote');
+      if (!raw) return;
+      sessionStorage.removeItem('trackitt-promote');
+      setPromotePrefill(JSON.parse(raw) as Partial<JobInput>);
+      setModal({ kind: 'add' });
+    } catch {
+      /* malformed payload — ignore */
+    }
+  }, []);
+
+  // The notification bell can request a specific job's detail modal — via
+  // sessionStorage on a fresh navigation, or a live event if already here.
+  useEffect(() => {
+    try {
+      const id = sessionStorage.getItem('trackitt-open-job');
+      if (id) {
+        sessionStorage.removeItem('trackitt-open-job');
+        setPendingOpenId(id);
+      }
+    } catch {
+      /* ignore */
+    }
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent<{ id: string }>).detail?.id;
+      if (id) setPendingOpenId(id);
+    };
+    window.addEventListener('trackitt:open-job', onOpen);
+    return () => window.removeEventListener('trackitt:open-job', onOpen);
+  }, []);
+
+  // Once jobs are loaded, open the requested job's detail modal.
+  useEffect(() => {
+    if (!pendingOpenId) return;
+    const job = jobs.find((j) => j.id === pendingOpenId);
+    if (job) {
+      setModal({ kind: 'detail', job, originRect: null });
+      setPendingOpenId(null);
+    }
+  }, [pendingOpenId, jobs]);
 
   // ⌘K / Ctrl+K to focus search
   useEffect(() => {
@@ -93,27 +133,12 @@ function Dashboard() {
 
   // Dynamic browser tab title
   useEffect(() => {
-    const base = 'Job Tracker';
+    const base = 'Trackitt';
     document.title = jobs.length > 0 ? `${base} · ${jobs.length} application${jobs.length === 1 ? '' : 's'}` : base;
     return () => {
       document.title = base;
     };
   }, [jobs.length]);
-
-  // Close user menu on outside click
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onClick = (e: MouseEvent) => {
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(e.target as Node)
-      ) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [menuOpen]);
 
   // Surface fetch errors as toasts
   useEffect(() => {
@@ -148,14 +173,15 @@ function Dashboard() {
       }
     });
     return sorted;
-  }, [jobs, filter, sort]);
+  }, [jobs, filter, sort, search]);
 
   // Keep detail modal in sync with edits / deletions
   useEffect(() => {
     if (modal.kind === 'detail') {
       const current = jobs.find((j) => j.id === modal.job.id);
       if (!current) setModal({ kind: 'closed' });
-      else if (current !== modal.job) setModal({ kind: 'detail', job: current });
+      else if (current !== modal.job)
+        setModal({ kind: 'detail', job: current, originRect: modal.originRect });
     }
   }, [jobs, modal]);
 
@@ -164,12 +190,23 @@ function Dashboard() {
     file: File | null,
     jdFile: File | null,
   ) => {
-    if (modal.kind === 'edit') {
-      await editJob(modal.job.id, data, file, jdFile);
-    } else {
-      await addJob(data, file, jdFile);
+    try {
+      const warning =
+        modal.kind === 'edit'
+          ? await editJob(modal.job.id, data, file, jdFile)
+          : await addJob(data, file, jdFile);
+      setModal({ kind: 'closed' });
+      if (warning) pushToast(warning, 'info');
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err !== null && 'message' in err
+            ? String((err as { message: unknown }).message)
+            : 'Could not save the application';
+      pushToast(msg, 'error');
+      throw err;
     }
-    setModal({ kind: 'closed' });
   };
 
   const handleStatusChange = async (id: string, status: JobStatus) => {
@@ -186,6 +223,17 @@ function Dashboard() {
     }
   };
 
+  const handleFollowUpToggle = async (id: string, done: boolean) => {
+    try {
+      await editJob(id, { follow_up_done: done });
+    } catch (err) {
+      pushToast(
+        err instanceof Error ? err.message : 'Could not update follow-up',
+        'error',
+      );
+    }
+  };
+
   const handleDelete = async () => {
     if (modal.kind !== 'delete') return;
     try {
@@ -196,89 +244,19 @@ function Dashboard() {
     }
   };
 
-  const handleSignOut = async () => {
-    setMenuOpen(false);
-    await signOut();
-    router.replace('/login');
-  };
-
-  const handleDeleteAccount = async () => {
-    await deleteAccount();
-    router.replace('/login');
-  };
-
-  const userLabel =
-    (user?.user_metadata?.full_name as string | undefined) ||
-    user?.email ||
-    'Account';
-  const displayedLabel = truncateMiddle(userLabel, 22);
-
   return (
     <div className="min-h-screen bg-page">
-      {/* Ribbon (not sticky) */}
-      <div className="bg-secondary">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          <h1 className="font-display font-extrabold text-primary text-2xl tracking-tight">
-            Job Tracker
-          </h1>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label={
-                theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
-              }
-              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-              className="flex items-center justify-center w-9 h-9 rounded-full text-primary transition-colors hover:bg-white/10"
-            >
-              {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-            </button>
-          <div className="relative" ref={menuRef}>
-            <button
-              type="button"
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              className="flex items-center gap-2 text-sm text-primary px-3 py-1.5 rounded-full transition-colors hover:bg-white/10"
-            >
-              <span className="hidden sm:inline">{displayedLabel}</span>
-              <span className="sm:hidden">Account</span>
-              <ChevronDown />
-            </button>
-            {menuOpen && (
-              <div
-                role="menu"
-                className="absolute right-0 mt-2 min-w-[200px] bg-primary rounded-xl shadow-menu overflow-hidden z-50"
-                style={{ border: '1px solid rgb(var(--rgb-secondary) / 0.12)' }}
-              >
-                <MenuItem onClick={handleSignOut}>Sign Out</MenuItem>
-                <MenuItem
-                  tone="danger"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setModal({ kind: 'delete-account' });
-                  }}
-                >
-                  Delete Account
-                </MenuItem>
-              </div>
-            )}
-          </div>
-          </div>
-        </div>
-      </div>
+      <div className="sticky top-0 z-40 w-full flex flex-col">
+        <AppHeader />
 
-      {/* Controls bar (sticky) */}
-      <div
-        className="sticky top-0 z-30 bg-page"
-        style={{ borderBottom: '1px solid rgb(var(--rgb-secondary) / 0.1)' }}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center gap-3">
+        {/* Controls bar */}
+        <div className="bg-page">
+        <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-10 py-3 flex flex-wrap items-center gap-3">
           <StatusTabs jobs={jobs} active={filter} onChange={setFilter} />
           <SortControl value={sort} onChange={setSort} />
 
           {/* Search fills remaining space */}
-          <div className="relative flex-1 min-w-[180px] order-last sm:order-none w-full sm:w-auto">
+          <div className="relative flex-1 min-w-[180px] order-last sm:order-none w-full sm:w-auto transition-transform duration-200 ease-out hover:scale-[1.02]">
             <span
               className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
               aria-hidden="true"
@@ -292,7 +270,7 @@ function Dashboard() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by company, role, or industry…"
               aria-label="Search applications"
-              className="w-full bg-primary text-secondary text-sm rounded-full pl-10 pr-16 py-1.5 border border-[rgb(var(--rgb-secondary)_/_0.25)] focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 transition-colors"
+              className="w-full bg-primary text-secondary text-sm rounded-full pl-10 pr-16 py-1.5 border border-[rgb(var(--rgb-secondary)_/_0.25)] hover:border-accent focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 transition-colors"
             />
             <span
               className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold pointer-events-none hidden sm:flex items-center gap-0.5 px-1.5 py-0.5 rounded-full"
@@ -306,21 +284,25 @@ function Dashboard() {
             </span>
           </div>
 
-          <button
+          <motion.button
             type="button"
-            onClick={() => setModal({ kind: 'add' })}
-            className="inline-flex items-center gap-1.5 bg-accent text-secondary px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 ease-out hover:scale-[1.03] whitespace-nowrap"
+            onClick={(e) => setModal({ kind: 'add', originRect: e.currentTarget.getBoundingClientRect() })}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.93 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+            className="inline-flex items-center gap-1.5 bg-accent text-secondary px-4 py-2 rounded-full text-sm font-semibold border border-transparent hover:border-accent transition-colors duration-200 ease-out whitespace-nowrap"
           >
             <span aria-hidden="true">+</span>
             <span className="hidden sm:inline">Add Application</span>
             <span className="sm:hidden">Add</span>
-          </button>
+          </motion.button>
         </div>
       </div>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <main className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
         {loading ? (
-          <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             <SkeletonCard />
             <SkeletonCard />
             <SkeletonCard />
@@ -340,30 +322,38 @@ function Dashboard() {
             />
           )
         ) : (
-          <div
+          <motion.div
+            layout
             key={`${filter}-${sort}-${search}`}
-            className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 animate-grid-fade"
+            className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 animate-grid-fade"
           >
+            <AnimatePresence mode="popLayout">
             {visibleJobs.map((job, idx) => (
               <JobCard
                 key={job.id}
                 job={job}
                 index={idx}
-                onOpen={() => setModal({ kind: 'detail', job })}
-                onOpenJd={() =>
-                  setModal({ kind: 'detail', job, focusJd: true })
+                onOpen={(rect) => setModal({ kind: 'detail', job, originRect: rect })}
+                onOpenJd={(rect) =>
+                  setModal({ kind: 'detail', job, focusJd: true, originRect: rect })
                 }
                 onStatusChange={handleStatusChange}
               />
             ))}
-          </div>
+            </AnimatePresence>
+          </motion.div>
         )}
       </main>
 
       <AddJobModal
         open={modal.kind === 'add' || modal.kind === 'edit'}
         initialJob={modal.kind === 'edit' ? modal.job : null}
-        onClose={() => setModal({ kind: 'closed' })}
+        prefill={modal.kind === 'add' ? promotePrefill : null}
+        originRect={modal.kind === 'add' ? modal.originRect ?? null : null}
+        onClose={() => {
+          setModal({ kind: 'closed' });
+          setPromotePrefill(null);
+        }}
         onSave={handleSave}
       />
 
@@ -371,6 +361,8 @@ function Dashboard() {
         open={modal.kind === 'detail'}
         job={modal.kind === 'detail' ? modal.job : null}
         focusJd={modal.kind === 'detail' ? modal.focusJd : false}
+        originRect={modal.kind === 'detail' ? modal.originRect : null}
+        onFollowUpToggle={handleFollowUpToggle}
         onClose={() => setModal({ kind: 'closed' })}
         onEdit={() =>
           modal.kind === 'detail' && setModal({ kind: 'edit', job: modal.job })
@@ -386,12 +378,6 @@ function Dashboard() {
         companyName={modal.kind === 'delete' ? modal.job.company_name : ''}
         onCancel={() => setModal({ kind: 'closed' })}
         onConfirm={handleDelete}
-      />
-
-      <DeleteAccountModal
-        open={modal.kind === 'delete-account'}
-        onCancel={() => setModal({ kind: 'closed' })}
-        onConfirm={handleDeleteAccount}
       />
 
       {toasts.length > 0 && (
@@ -411,71 +397,6 @@ function Dashboard() {
         </div>
       )}
     </div>
-  );
-}
-
-function MenuItem({
-  children,
-  onClick,
-  tone,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  tone?: 'danger';
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={onClick}
-      className="w-full text-left px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent/20"
-      style={{ color: tone === 'danger' ? '#dc2626' : 'var(--color-secondary)' }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ChevronDown() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-      <path
-        d="M3 4.5L6 7.5L9 4.5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </svg>
-  );
-}
-
-function SunIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M20.5 14.5A8 8 0 019.5 3.5a8 8 0 1011 11z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
 

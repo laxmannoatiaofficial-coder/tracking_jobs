@@ -8,6 +8,8 @@ export type JobStatus =
 
 export type RoleType = 'Full-time' | 'Part-time' | 'Internship' | 'Contract';
 
+export type CompensationPeriod = 'Annual' | 'Monthly';
+
 export type LocationType = 'On-site' | 'Remote' | 'Hybrid';
 
 export interface JobApplication {
@@ -18,6 +20,7 @@ export interface JobApplication {
   role: string;
   industry: string;
   ctc: string;
+  compensation_period: CompensationPeriod | '';
   role_type: RoleType;
   location_type: LocationType;
   location_city: string;
@@ -28,6 +31,7 @@ export interface JobApplication {
   personal_note: string;
   status: JobStatus;
   follow_up_date: string;
+  follow_up_done: boolean;
   created_at: string;
 }
 
@@ -40,6 +44,30 @@ export type SortOption =
   | 'company-desc';
 
 export type StatusFilter = JobStatus | 'All';
+
+// ── Watchlist ──────────────────────────────────────────────────────────────
+
+/** A watchlist entry is either a whole company or a specific job posting. */
+export type WatchlistKind = 'Company' | 'Job';
+
+export interface WatchlistCompany {
+  id: string;
+  user_id: string;
+  kind: WatchlistKind;
+  company_name: string;
+  /** Job title — only meaningful when kind === 'Job'. */
+  role: string;
+  industry: string;
+  website_url: string;
+  location: string;
+  note: string;
+  created_at: string;
+}
+
+export type WatchlistInput = Omit<
+  WatchlistCompany,
+  'id' | 'created_at' | 'user_id'
+>;
 
 export const STATUS_OPTIONS: JobStatus[] = [
   'Applied',
@@ -54,7 +82,11 @@ export const ROLE_TYPE_OPTIONS: RoleType[] = [
   'Full-time',
   'Part-time',
   'Internship',
-  'Contract',
+];
+
+export const COMPENSATION_PERIOD_OPTIONS: CompensationPeriod[] = [
+  'Annual',
+  'Monthly',
 ];
 
 export const LOCATION_TYPE_OPTIONS: LocationType[] = [

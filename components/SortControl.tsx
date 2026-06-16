@@ -1,6 +1,7 @@
 'use client';
 
 import type { SortOption } from '@/types';
+import { SelectField } from './SelectField';
 
 interface SortControlProps {
   value: SortOption;
@@ -14,27 +15,17 @@ const OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'company-desc', label: 'Company Name — Z to A' },
 ];
 
+const pillClass =
+  'w-auto bg-primary text-secondary text-sm rounded-full px-4 py-1.5 font-medium border border-[rgb(var(--rgb-secondary)_/_0.25)] hover:border-accent hover:scale-[1.03] focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 transition-all duration-200 ease-out';
+
 export function SortControl({ value, onChange }: SortControlProps) {
   return (
-    <select
+    <SelectField
       value={value}
-      onChange={(e) => onChange(e.target.value as SortOption)}
+      onChange={onChange}
+      options={OPTIONS}
+      className={pillClass}
       aria-label="Sort applications"
-      className="bg-primary text-secondary text-sm rounded-full px-4 py-1.5 pr-9 cursor-pointer transition-all duration-200 ease-out hover:border-accent font-medium"
-      style={{
-        border: '1px solid rgb(var(--rgb-secondary) / 0.25)',
-        appearance: 'none',
-        backgroundImage:
-          "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='%232D3A3A' d='M6 8L2 4h8z'/></svg>\")",
-        backgroundRepeat: 'no-repeat',
-        backgroundPosition: 'right 12px center',
-      }}
-    >
-      {OPTIONS.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+    />
   );
 }

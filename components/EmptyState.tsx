@@ -10,7 +10,7 @@ interface EmptyStateProps {
 export function EmptyState({ filter, onAdd }: EmptyStateProps) {
   const subtext =
     filter === 'All'
-      ? "The dream job won't apply itself — add your first one!"
+      ? "Add the jobs you've applied for - stress less on remembering and more on applying."
       : `Nothing marked as ${filter} yet. Keep going!`;
 
   return (

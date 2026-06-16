@@ -11,6 +11,7 @@ create table if not exists job_applications (
   role text not null,
   industry text,
   ctc text,
+  compensation_period text,
   role_type text not null,
   location_type text not null,
   location_city text,
@@ -22,6 +23,7 @@ create table if not exists job_applications (
   status text not null default 'Applied',
   date_of_application date not null,
   follow_up_date date,
+  follow_up_done boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -52,6 +54,51 @@ create policy "Users can delete their own jobs"
 create index if not exists job_applications_user_created_idx
   on job_applications (user_id, created_at desc);
 
+-- ============================================================================
+-- Company Watchlist — companies you may apply to in the future
+-- ============================================================================
+create table if not exists company_watchlist (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  kind text not null default 'Company', -- 'Company' or 'Job'
+  company_name text not null,
+  role text,                            -- only for kind = 'Job'
+  industry text,
+  website_url text,
+  location text,
+  note text,
+  created_at timestamptz not null default now()
+);
+
+alter table company_watchlist enable row level security;
+
+create policy "Users can view their own watchlist"
+  on company_watchlist for select
+  using (auth.uid() = user_id);
+
+create policy "Users can insert their own watchlist"
+  on company_watchlist for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update their own watchlist"
+  on company_watchlist for update
+  using (auth.uid() = user_id);
+
+create policy "Users can delete their own watchlist"
+  on company_watchlist for delete
+  using (auth.uid() = user_id);
+
+create index if not exists company_watchlist_user_created_idx
+  on company_watchlist (user_id, created_at desc);
+
+-- ============================================================================
+-- EXISTING PROJECTS: if you already ran this schema, add the new columns with:
+--
+--   alter table job_applications
+--     add column if not exists compensation_period text;
+--   alter table job_applications
+--     add column if not exists follow_up_done boolean not null default false;
+--
 -- ============================================================================
 -- AFTER RUNNING THIS FILE:
 --

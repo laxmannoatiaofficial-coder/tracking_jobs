@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { JobApplication } from '@/types';
 import {
+  formatCompensationDisplay,
   formatDate,
   formatLocation,
   getFollowUpState,
@@ -16,7 +17,9 @@ interface JobDetailModalProps {
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onFollowUpToggle: (id: string, done: boolean) => void;
   focusJd?: boolean;
+  originRect?: DOMRect | null;
 }
 
 export function JobDetailModal({
@@ -25,14 +28,24 @@ export function JobDetailModal({
   onClose,
   onEdit,
   onDelete,
+  onFollowUpToggle,
   focusJd = false,
+  originRect,
 }: JobDetailModalProps) {
+  const [cachedJob, setCachedJob] = useState<JobApplication | null>(job);
+
+  useEffect(() => {
+    if (job) setCachedJob(job);
+  }, [job]);
+
+  const displayJob = job || cachedJob;
+
   const [jdExpanded, setJdExpanded] = useState(false);
   const jdSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    if (focusJd && job?.jd_text) {
+    if (focusJd && displayJob?.jd_text) {
       setJdExpanded(true);
       // Scroll the JD section into view after the modal mounts
       setTimeout(() => {
@@ -44,10 +57,10 @@ export function JobDetailModal({
     } else {
       setJdExpanded(false);
     }
-  }, [open, focusJd, job?.jd_text]);
+  }, [open, focusJd, displayJob?.jd_text]);
 
-  if (!job) return null;
-  const followUp = getFollowUpState(job.follow_up_date);
+  if (!displayJob) return null;
+  const followUp = getFollowUpState(displayJob.follow_up_date);
   const followUpColor =
     followUp === 'overdue'
       ? '#dc2626'
@@ -61,6 +74,7 @@ export function JobDetailModal({
       onClose={onClose}
       labelledBy="job-detail-title"
       widthClass="max-w-2xl"
+      originRect={originRect}
     >
       <header className="flex items-start justify-between gap-4 p-6 bg-secondary rounded-t-3xl">
         <div className="min-w-0 flex-1">
@@ -68,18 +82,18 @@ export function JobDetailModal({
             id="job-detail-title"
             className="font-display font-bold text-2xl sm:text-3xl text-primary leading-tight break-words"
           >
-            {job.company_name}
+            {displayJob.company_name}
           </h2>
-          {job.industry && (
+          {displayJob.industry && (
             <p
               className="text-sm mt-1"
               style={{ color: 'rgb(var(--rgb-on-dark) / 0.7)' }}
             >
-              {job.industry}
+              {displayJob.industry}
             </p>
           )}
           <div className="mt-3">
-            <StatusBadge status={job.status} size="md" />
+            <StatusBadge status={displayJob.status} size="md" />
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -88,7 +102,7 @@ export function JobDetailModal({
             onClick={onEdit}
             aria-label="Edit application"
             title="Edit"
-            className="p-2 rounded-full hover:bg-accent/25 transition-colors"
+            className="p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110 transition-all duration-200 ease-out"
           >
             <PencilIcon />
           </button>
@@ -97,7 +111,7 @@ export function JobDetailModal({
             onClick={onClose}
             aria-label="Close"
             title="Close"
-            className="p-2 rounded-full hover:bg-accent/25 transition-colors"
+            className="p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110 transition-all duration-200 ease-out"
           >
             <CloseIcon />
           </button>
@@ -106,58 +120,93 @@ export function JobDetailModal({
 
       <div className="overflow-y-auto scroll-area px-6 py-5 flex-1">
         <dl className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-6 gap-y-3 text-sm">
-          <Row label="Role" value={job.role} />
-          <Row label="Type" value={job.role_type} />
-          {job.industry && <Row label="Industry" value={job.industry} />}
-          <Row label="Location" value={formatLocation(job)} />
-          {job.ctc && <Row label="CTC" value={job.ctc} />}
-          <Row label="Date Applied" value={formatDate(job.date_of_application)} />
-          {job.follow_up_date && (
+          <Row label="Role" value={displayJob.role} />
+          <Row label="Type" value={displayJob.role_type} />
+          {displayJob.industry && <Row label="Industry" value={displayJob.industry} />}
+          <Row label="Location" value={formatLocation(displayJob)} />
+          {displayJob.ctc && (
+            <Row
+              label="Compensation"
+              value={formatCompensationDisplay(displayJob.ctc, displayJob.compensation_period)}
+            />
+          )}
+          <Row label="Date Applied" value={formatDate(displayJob.date_of_application)} />
+          {displayJob.follow_up_date && (
             <Row
               label="Follow-up Date"
               value={
-                <span
-                  className={
-                    followUp === 'today' || followUp === 'overdue'
-                      ? 'animate-pulse'
-                      : ''
-                  }
-                  style={{ color: followUpColor }}
-                >
-                  {formatDate(job.follow_up_date)}
-                  {followUp === 'overdue' && ' · overdue'}
-                  {followUp === 'today' && ' · today'}
-                </span>
+                displayJob.follow_up_done ? (
+                  <span className="inline-flex flex-wrap items-center gap-2.5">
+                    <span style={{ color: '#16a34a' }}>
+                      {formatDate(displayJob.follow_up_date)} · follow-up
+                      completed ✓
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onFollowUpToggle(displayJob.id, false)
+                      }
+                      className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-[rgb(var(--rgb-secondary)_/_0.35)] text-[color:var(--color-ink)] hover:border-accent hover:scale-[1.05] transition-all duration-200 ease-out"
+                    >
+                      Undo
+                    </button>
+                  </span>
+                ) : (
+                  <span className="inline-flex flex-wrap items-center gap-2.5">
+                    <span
+                      className={
+                        followUp === 'today' || followUp === 'overdue'
+                          ? 'animate-pulse'
+                          : ''
+                      }
+                      style={{ color: followUpColor }}
+                    >
+                      {formatDate(displayJob.follow_up_date)}
+                      {followUp === 'overdue' && ' · overdue'}
+                      {followUp === 'today' && ' · today'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onFollowUpToggle(displayJob.id, true)
+                      }
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white hover:scale-[1.05] transition-all duration-200 ease-out"
+                    >
+                      <CheckIcon />
+                      Mark as done
+                    </button>
+                  </span>
+                )
               }
             />
           )}
-          {job.jd_url && !job.jd_text && (
+          {displayJob.jd_url && !displayJob.jd_text && (
             <Row
               label="JD Link"
               value={
                 <a
-                  href={job.jd_url}
+                  href={displayJob.jd_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-semibold text-secondary underline decoration-accent decoration-2 underline-offset-4 hover:text-accent transition-colors break-all"
+                  className="inline-block font-semibold text-secondary underline decoration-accent decoration-2 underline-offset-4 hover:text-accent hover:scale-[1.03] transition-all duration-200 ease-out break-all origin-left"
                 >
                   View Job Description →
                 </a>
               }
             />
           )}
-          {job.resume_url && (
+          {displayJob.resume_url && (
             <Row
               label="Resume"
               value={
                 <a
-                  href={job.resume_url}
+                  href={displayJob.resume_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-semibold text-secondary underline decoration-accent decoration-2 underline-offset-4 hover:text-accent transition-colors break-all"
+                  className="inline-block font-semibold text-secondary underline decoration-accent decoration-2 underline-offset-4 hover:text-accent hover:scale-[1.03] transition-all duration-200 ease-out break-all origin-left"
                 >
-                  {job.resume_file_name
-                    ? `Download Resume (${job.resume_file_name})`
+                  {displayJob.resume_file_name
+                    ? `Download Resume (${displayJob.resume_file_name})`
                     : 'Open Resume Link →'}
                 </a>
               }
@@ -165,7 +214,7 @@ export function JobDetailModal({
           )}
         </dl>
 
-        {job.jd_text && (
+        {displayJob.jd_text && (
           <div ref={jdSectionRef} className="mt-6">
             <div className="flex items-center justify-between mb-2">
               <h3
@@ -177,7 +226,7 @@ export function JobDetailModal({
               <button
                 type="button"
                 onClick={() => setJdExpanded((v) => !v)}
-                className="text-xs font-semibold underline decoration-accent decoration-2 underline-offset-4 hover:text-accent transition-colors"
+                className="inline-block text-xs font-semibold underline decoration-accent decoration-2 underline-offset-4 hover:text-accent hover:scale-[1.05] transition-all duration-200 ease-out"
                 aria-expanded={jdExpanded}
               >
                 {jdExpanded ? 'Show less' : 'Show more'}
@@ -193,12 +242,12 @@ export function JobDetailModal({
                 wordBreak: 'break-word',
               }}
             >
-              {job.jd_text}
+              {displayJob.jd_text}
             </div>
           </div>
         )}
 
-        {job.personal_note && (
+        {displayJob.personal_note && (
           <div className="mt-6">
             <h3
               className="text-xs uppercase tracking-wider mb-2 font-semibold"
@@ -214,7 +263,7 @@ export function JobDetailModal({
                 wordBreak: 'break-word',
               }}
             >
-              {job.personal_note}
+              {displayJob.personal_note}
             </div>
           </div>
         )}
@@ -227,11 +276,8 @@ export function JobDetailModal({
         <button
           type="button"
           onClick={onDelete}
-          className="px-4 py-2 rounded-full text-sm font-semibold transition-colors"
-          style={{
-            border: '1px solid #dc2626',
-            color: '#dc2626',
-          }}
+          className="px-4 py-2 rounded-full text-sm font-semibold border border-[#dc2626] hover:border-accent hover:scale-[1.05] transition-all duration-200 ease-out"
+          style={{ color: '#dc2626' }}
         >
           Delete
         </button>
@@ -264,6 +310,20 @@ function Row({
       </dt>
       <dd className="text-secondary break-words">{value}</dd>
     </>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+      <path
+        d="M1.5 5.5L4 8l4.5-5.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

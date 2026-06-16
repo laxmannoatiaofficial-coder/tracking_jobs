@@ -2,6 +2,7 @@
 
 import type { JobApplication, StatusFilter } from '@/types';
 import { STATUS_OPTIONS } from '@/types';
+import { SelectField } from './SelectField';
 
 interface StatusFilterControlProps {
   jobs: JobApplication[];
@@ -10,6 +11,9 @@ interface StatusFilterControlProps {
 }
 
 const ALL_OPTIONS: StatusFilter[] = ['All', ...STATUS_OPTIONS];
+
+const pillClass =
+  'w-auto bg-primary text-secondary text-sm rounded-full px-4 py-1.5 font-medium border border-[rgb(var(--rgb-secondary)_/_0.25)] hover:border-accent hover:scale-[1.03] focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 transition-all duration-200 ease-out';
 
 // Kept named `StatusTabs` to avoid touching imports — now renders as a dropdown.
 export function StatusTabs({
@@ -20,26 +24,18 @@ export function StatusTabs({
   const countFor = (s: StatusFilter) =>
     s === 'All' ? jobs.length : jobs.filter((j) => j.status === s).length;
 
+  const options = ALL_OPTIONS.map((s) => ({
+    value: s,
+    label: `${s} (${countFor(s)})`,
+  }));
+
   return (
-    <select
+    <SelectField
       value={active}
-      onChange={(e) => onChange(e.target.value as StatusFilter)}
+      onChange={onChange}
+      options={options}
+      className={pillClass}
       aria-label="Filter by status"
-      className="bg-primary text-secondary text-sm rounded-full px-4 py-1.5 pr-9 cursor-pointer transition-all duration-200 ease-out hover:border-accent font-medium"
-      style={{
-        border: '1px solid rgb(var(--rgb-secondary) / 0.25)',
-        appearance: 'none',
-        backgroundImage:
-          "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='%232D3A3A' d='M6 8L2 4h8z'/></svg>\")",
-        backgroundRepeat: 'no-repeat',
-        backgroundPosition: 'right 12px center',
-      }}
-    >
-      {ALL_OPTIONS.map((s) => (
-        <option key={s} value={s}>
-          {s} ({countFor(s)})
-        </option>
-      ))}
-    </select>
+    />
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { LogoMark } from '@/components/Logo';
 
 type Mode = 'login' | 'signup';
 
@@ -14,6 +15,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -26,7 +28,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     if (mode === 'signup' && password !== confirm) {
-      setError('Passwords do not match');
+      setError('Passwords do not match.');
       return;
     }
     setSubmitting(true);
@@ -40,9 +42,7 @@ export default function LoginPage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Something went wrong';
       if (/already registered|already exists/i.test(msg)) {
-        setError(
-          'An account with this email already exists. Try logging in instead.',
-        );
+        setError('An account with this email already exists.');
       } else if (/invalid login|invalid credentials/i.test(msg)) {
         setError('Incorrect email or password. Please try again.');
       } else {
@@ -61,152 +61,221 @@ export default function LoginPage() {
       // OAuth redirects away — no further action
     } catch (err) {
       setGoogleLoading(false);
-      setError(err instanceof Error ? err.message : 'Could not start Google sign-in');
+      const msg = err instanceof Error ? err.message : '';
+      if (/provider is not enabled|Unsupported provider/i.test(msg)) {
+        setError(
+          'Google sign-in isn’t set up yet. Enable the Google provider in your Supabase project, or use email below.',
+        );
+      } else {
+        setError(msg || 'Could not start Google sign-in');
+      }
     }
   };
 
   return (
-    <div className="min-h-screen bg-secondary flex items-center justify-center p-4">
-      <div className="w-full max-w-[420px] bg-primary rounded-3xl shadow-modal p-8 sm:p-10">
-        <div className="text-center mb-7">
-          <h1 className="font-display font-extrabold text-3xl text-secondary">
-            Job Tracker
-          </h1>
+    <div className="min-h-screen bg-secondary flex items-center justify-center px-6 py-10 md:px-12">
+      <div className="w-full max-w-[440px] mx-auto flex flex-col items-center gap-6">
+        {/* Logo block */}
+        <div
+          className="flex items-center gap-3 rounded-xl px-5 py-3 bg-primary text-secondary"
+          style={{ boxShadow: '0 2px 12px rgba(0, 0, 0, 0.15)' }}
+        >
+          <LogoMark size={26} />
+          <span className="font-display font-bold text-xl text-secondary">
+            Trackitt
+          </span>
+        </div>
+
+        {/* Static tagline */}
+        <div className="text-center w-full">
+          <h2 className="font-display font-bold text-2xl text-primary mb-1">
+            Never get caught off guard again.
+          </h2>
           <p
-            className="font-body text-sm mt-2"
-            style={{ color: 'rgb(var(--rgb-ink) / 0.6)' }}
+            className="text-sm max-w-xs mx-auto"
+            style={{ color: 'rgb(var(--rgb-on-dark) / 0.65)' }}
           >
-            Track every application. Land the right role.
+            Know exactly who&rsquo;s calling, what you applied for, and when to
+            follow up.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleGoogle}
-          disabled={googleLoading || submitting}
-          className="w-full flex items-center justify-center gap-3 bg-primary text-secondary text-sm font-semibold rounded-full px-4 py-3 transition-all duration-200 ease-out hover:scale-[1.02] disabled:opacity-60 disabled:cursor-not-allowed"
-          style={{ border: '1px solid rgb(var(--rgb-secondary) / 0.25)' }}
+        {/* Login card */}
+        <div
+          className="w-full rounded-3xl p-9 bg-primary"
+          style={{
+            border: '1px solid rgb(var(--rgb-secondary) / 0.08)',
+            boxShadow: '0 12px 48px rgba(0, 0, 0, 0.20)',
+          }}
         >
-          <GoogleLogo />
-          {googleLoading ? 'Redirecting…' : 'Continue with Google'}
-        </button>
-
-        <div className="flex items-center gap-3 my-6">
-          <div
-            className="flex-1 h-px"
-            style={{ background: 'rgb(var(--rgb-secondary) / 0.15)' }}
-          />
-          <span
-            className="text-xs"
-            style={{ color: 'rgb(var(--rgb-ink) / 0.5)' }}
-          >
-            or
-          </span>
-          <div
-            className="flex-1 h-px"
-            style={{ background: 'rgb(var(--rgb-secondary) / 0.15)' }}
-          />
-        </div>
-
-        <div className="text-center mb-4 text-xs">
-          <span style={{ color: 'rgb(var(--rgb-ink) / 0.65)' }}>
-            {mode === 'login'
-              ? "Don't have an account? "
-              : 'Already have an account? '}
-          </span>
           <button
             type="button"
-            onClick={() => {
-              setMode(mode === 'login' ? 'signup' : 'login');
-              setError(null);
-            }}
-            className="font-semibold text-secondary underline decoration-accent decoration-2 underline-offset-4 hover:text-accent transition-colors"
+            onClick={handleGoogle}
+            disabled={googleLoading || submitting}
+            className="w-full flex items-center justify-center gap-3 text-secondary text-sm font-semibold rounded-full px-5 py-3 border border-[rgb(var(--rgb-secondary)_/_0.18)] hover:border-accent transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ background: 'rgb(var(--rgb-dropdown))' }}
           >
-            {mode === 'login' ? 'Sign up' : 'Log in'}
+            <GoogleLogo />
+            {googleLoading ? 'Redirecting…' : 'Continue with Google'}
           </button>
-        </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <Field label="Email">
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={inputClass}
+          <div className="flex items-center mt-5 mb-5">
+            <div
+              className="flex-1 h-px"
+              style={{ background: 'rgb(var(--rgb-secondary) / 0.10)' }}
             />
-          </Field>
-          <Field label="Password">
-            <input
-              type="password"
-              required
-              minLength={6}
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={inputClass}
+            <span
+              className="text-xs tracking-wider px-3"
+              style={{ color: 'rgb(var(--rgb-ink) / 0.35)' }}
+            >
+              OR
+            </span>
+            <div
+              className="flex-1 h-px"
+              style={{ background: 'rgb(var(--rgb-secondary) / 0.10)' }}
             />
-          </Field>
-          {mode === 'signup' && (
-            <Field label="Confirm Password">
+          </div>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <Field label="Email Address">
               <input
-                type="password"
+                type="email"
                 required
-                minLength={6}
-                autoComplete="new-password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
                 className={inputClass}
               />
             </Field>
-          )}
 
-          <button
-            type="submit"
-            disabled={submitting || googleLoading}
-            className="mt-2 w-full bg-accent text-secondary text-sm font-semibold rounded-full px-4 py-3 transition-all duration-200 ease-out hover:scale-[1.02] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {submitting && <InlineSpinner />}
-            {submitting
-              ? mode === 'login'
-                ? 'Logging in…'
-                : 'Creating account…'
-              : mode === 'login'
-                ? 'Log In'
-                : 'Create Account'}
-          </button>
-
-          {error && (
-            <p
-              className="text-xs text-center mt-1"
-              style={{ color: '#dc2626' }}
-              role="alert"
+            <Field
+              label="Password"
+              right={
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-accent cursor-pointer hover:underline decoration-2 underline-offset-2"
+                >
+                  Forgot Password?
+                </button>
+              }
             >
-              {error}
-            </p>
-          )}
-        </form>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  minLength={6}
+                  autoComplete={
+                    mode === 'login' ? 'current-password' : 'new-password'
+                  }
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`${inputClass} pr-11`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full cursor-pointer hover:bg-accent/20 transition-colors"
+                  style={{ color: 'rgb(var(--rgb-ink) / 0.45)' }}
+                >
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+            </Field>
+
+            {/* Confirm Password — slides open in Sign Up mode */}
+            <div
+              className={`overflow-hidden transition-all duration-200 ${
+                mode === 'signup'
+                  ? 'max-h-24 opacity-100'
+                  : 'max-h-0 opacity-0 -mt-4'
+              }`}
+            >
+              <Field label="Confirm Password">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required={mode === 'signup'}
+                  minLength={6}
+                  autoComplete="new-password"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  className={inputClass}
+                  tabIndex={mode === 'signup' ? 0 : -1}
+                />
+              </Field>
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitting || googleLoading}
+              className="mt-2 w-full bg-accent text-secondary text-sm font-bold rounded-full px-4 py-3.5 transition-all duration-150 hover:brightness-95 hover:scale-[1.01] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
+              style={{ boxShadow: '0 4px 16px rgba(255, 200, 87, 0.40)' }}
+            >
+              {submitting ? (
+                <InlineSpinner />
+              ) : mode === 'login' ? (
+                'Sign in'
+              ) : (
+                'Create Account'
+              )}
+            </button>
+
+            {error && (
+              <p
+                className="text-xs text-center animate-grid-fade"
+                style={{ color: '#EF4444' }}
+                role="alert"
+              >
+                {error}
+              </p>
+            )}
+          </form>
+
+          <p
+            className="text-center text-sm mt-4"
+            style={{ color: 'rgb(var(--rgb-ink) / 0.6)' }}
+          >
+            {mode === 'login'
+              ? "Don't have an account? "
+              : 'Already have an account? '}
+            <button
+              type="button"
+              onClick={() => {
+                setMode(mode === 'login' ? 'signup' : 'login');
+                setError(null);
+              }}
+              className="font-semibold text-accent cursor-pointer hover:underline decoration-2 underline-offset-4"
+            >
+              {mode === 'login' ? 'Get Started' : 'Sign in'}
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );
 }
 
 const inputClass =
-  'w-full bg-primary text-secondary text-sm rounded-xl px-3 py-2.5 border border-[rgb(var(--rgb-secondary)_/_0.25)] focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 transition-colors';
+  'w-full text-secondary text-sm rounded-2xl px-4 py-3 bg-[rgb(var(--rgb-secondary)_/_0.06)] border border-[rgb(var(--rgb-secondary)_/_0.15)] hover:border-accent focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 transition-all duration-200 ease-out placeholder:text-[color:rgb(var(--rgb-ink)_/_0.28)]';
 
 function Field({
   label,
+  right,
   children,
 }: {
   label: string;
+  right?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-secondary mb-1.5">
-        {label}
-      </label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="block text-sm font-medium text-secondary">
+          {label}
+        </label>
+        {right}
+      </div>
       {children}
     </div>
   );
@@ -222,6 +291,40 @@ function InlineSpinner() {
       }}
       aria-hidden="true"
     />
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M2.5 13.5l11-11"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { CITY_SUGGESTIONS } from '@/types';
 
 interface CityComboboxProps {
@@ -168,88 +169,97 @@ export function CityCombobox({
         }}
         aria-label={open ? 'Close city list' : 'Open city list'}
         tabIndex={-1}
-        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-accent/25 transition-colors"
+        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110 transition-all duration-200 ease-out"
       >
         <Chevron open={open} />
       </button>
 
       {mounted &&
-        open &&
         pos &&
         filtered.length > 0 &&
         createPortal(
-          <div
-            id="city-combobox-list"
-            ref={panelRef}
-            role="listbox"
-            style={{
-              position: 'fixed',
-              top: pos.top,
-              left: pos.left,
-              width: pos.width,
-              zIndex: 100,
-            }}
-            className="bg-primary rounded-2xl overflow-y-auto scroll-area max-h-64 shadow-menu animate-modal-in"
-          >
-            {filtered.map((c, idx) => {
-              const active = idx === highlight;
-              return (
-                <button
-                  key={c.name}
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  onClick={() => choose(c.name)}
-                  onMouseEnter={() => setHighlight(idx)}
-                  className={`block w-full text-left px-4 py-2 text-sm transition-colors ${
-                    active ? 'bg-accent/30' : 'hover:bg-accent/15'
-                  }`}
-                  style={{
-                    color: 'var(--color-ink)',
-                    border: 'none',
-                    borderTop:
-                      idx === 0
-                        ? 'none'
-                        : '1px solid rgb(var(--rgb-secondary) / 0.06)',
-                  }}
-                >
-                  <span className="font-medium">{c.name}</span>
-                  {c.aliases?.length && (
-                    <span
-                      className="ml-1.5 text-xs"
-                      style={{ color: 'rgb(var(--rgb-ink) / 0.55)' }}
+          <AnimatePresence>
+            {open && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                id="city-combobox-list"
+                ref={panelRef as any}
+                role="listbox"
+                style={{
+                  position: 'fixed',
+                  top: pos.top,
+                  left: pos.left,
+                  width: pos.width,
+                  zIndex: 100,
+                }}
+                className="dropdown-panel rounded-2xl overflow-y-auto scroll-area max-h-64"
+              >
+                {filtered.map((c, idx) => {
+                  const active = idx === highlight;
+                  return (
+                    <button
+                      key={c.name}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => choose(c.name)}
+                      onMouseEnter={() => setHighlight(idx)}
+                      className={`block w-full text-left px-4 py-2 text-sm transition-colors ${
+                        active ? 'bg-accent/30' : 'hover:bg-accent/15'
+                      }`}
+                      style={{ color: 'var(--color-ink)', border: 'none' }}
                     >
-                      ({c.aliases.join(', ')})
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>,
+                      <span className="font-medium">{c.name}</span>
+                      {c.aliases?.length && (
+                        <span
+                          className="ml-1.5 text-xs"
+                          style={{ color: 'rgb(var(--rgb-ink) / 0.55)' }}
+                        >
+                          ({c.aliases.join(', ')})
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </motion.div>
+            )}
+          </AnimatePresence>,
           document.body,
         )}
 
       {mounted &&
         showNoMatch &&
+        pos &&
         createPortal(
-          <div
-            ref={panelRef}
-            style={{
-              position: 'fixed',
-              top: pos.top,
-              left: pos.left,
-              width: pos.width,
-              zIndex: 100,
-            }}
-            className="bg-primary rounded-2xl shadow-menu px-4 py-3 text-xs animate-modal-in"
-          >
-            <span style={{ color: 'rgb(var(--rgb-ink) / 0.65)' }}>
-              No match in the list. Press Enter or click outside to keep
-              &ldquo;
-              <span className="text-secondary font-medium">{value}</span>
-              &rdquo; as your city.
-            </span>
-          </div>,
+          <AnimatePresence>
+            {open && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                ref={panelRef as any}
+                style={{
+                  position: 'fixed',
+                  top: pos.top,
+                  left: pos.left,
+                  width: pos.width,
+                  zIndex: 100,
+                }}
+                className="dropdown-panel rounded-2xl px-4 py-3 text-xs"
+              >
+                <span style={{ color: 'rgb(var(--rgb-ink) / 0.65)' }}>
+                  No match in the list. Press Enter or click outside to keep
+                  &ldquo;
+                  <span className="text-secondary font-medium">{value}</span>
+                  &rdquo; as your city.
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>,
           document.body,
         )}
     </div>

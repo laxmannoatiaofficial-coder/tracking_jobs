@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import type { JobApplication, JobStatus } from '@/types';
 import { STATUS_OPTIONS } from '@/types';
 import {
+  formatCompensationDisplay,
   formatDateShort,
   formatLocation,
   getFollowUpState,
@@ -13,8 +15,8 @@ import { StatusBadge } from './StatusBadge';
 interface JobCardProps {
   job: JobApplication;
   index: number;
-  onOpen: () => void;
-  onOpenJd: () => void;
+  onOpen: (rect: DOMRect) => void;
+  onOpenJd: (rect: DOMRect) => void;
   onStatusChange: (id: string, status: JobStatus) => void;
 }
 
@@ -27,14 +29,51 @@ export function JobCard({
 }: JobCardProps) {
   const followUp = getFollowUpState(job.follow_up_date);
   const [statusOpen, setStatusOpen] = useState(false);
-  const statusRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Scroll shrink effect as card goes under sticky header (header is ~140px tall)
+  const { scrollYProgress } = useScroll({
+    target: wrapperRef,
+    offset: ['start 160px', 'start 0px'],
+  });
+  
+  const scrollScale = useTransform(scrollYProgress, [0, 1], [1, 0.85]);
+  const scrollOpacity = useTransform(scrollYProgress, [0, 1], [1, 0.3]);
+
+  const isPointerInHoverZone = useCallback((x: number, y: number) => {
+    const hit = (el: HTMLElement | null, topPad = 0) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return (
+        x >= r.left &&
+        x <= r.right &&
+        y >= r.top - topPad &&
+        y <= r.bottom
+      );
+    };
+    return hit(cardRef.current) || hit(menuRef.current, 10);
+  }, []);
+
+  // Close when the cursor leaves both the card and the dropdown menu.
+  useEffect(() => {
+    if (!statusOpen) return;
+    const onMove = (e: MouseEvent) => {
+      if (!isPointerInHoverZone(e.clientX, e.clientY)) {
+        setStatusOpen(false);
+      }
+    };
+    document.addEventListener('mousemove', onMove);
+    return () => document.removeEventListener('mousemove', onMove);
+  }, [statusOpen, isPointerInHoverZone]);
 
   useEffect(() => {
     if (!statusOpen) return;
     const onDocClick = (e: MouseEvent) => {
-      if (statusRef.current && !statusRef.current.contains(e.target as Node)) {
-        setStatusOpen(false);
-      }
+      const t = e.target as Node;
+      if (cardRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setStatusOpen(false);
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
@@ -42,10 +81,10 @@ export function JobCard({
 
   const followUpColor =
     followUp === 'overdue'
-      ? '#fca5a5' // red-300, readable on dark teal footer (both themes)
+      ? '#dc2626' // matches the detail modal — row now sits on the card surface
       : followUp === 'today'
-        ? '#fcd34d' // amber-300
-        : 'rgb(var(--rgb-on-dark) / 0.7)'; // light text @ 70% — footer is dark in both modes
+        ? '#d97706'
+        : 'rgb(var(--rgb-ink) / 0.65)';
 
   const downloadResume = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -59,59 +98,85 @@ export function JobCard({
     e.stopPropagation();
     // Text JD opens the detail modal (auto-expanded); URL JD opens in a new tab.
     if (job.jd_text) {
-      onOpenJd();
+      onOpenJd(cardRef.current!.getBoundingClientRect());
     } else if (job.jd_url) {
       window.open(job.jd_url, '_blank', 'noopener,noreferrer');
     }
   };
 
   return (
-    <article
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
-      tabIndex={0}
-      role="button"
-      aria-label={`Open details for ${job.company_name} — ${job.role}`}
-      className={`group relative bg-primary rounded-2xl p-5 cursor-pointer animate-card-in transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:-translate-y-1 hover:scale-[1.015] shadow-card-accent hover:shadow-card-accent-hover flex flex-col gap-3 overflow-visible ${
-        statusOpen ? 'z-30' : ''
-      }`}
-      style={{
-        border: '1px solid rgb(var(--rgb-secondary) / 0.12)',
-        animationDelay: `${Math.min(index, 20) * 50}ms`,
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(255, 200, 87, 0.7)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'rgb(var(--rgb-secondary) / 0.12)';
-      }}
+    <motion.div 
+      ref={wrapperRef} 
+      style={{ scale: scrollScale, opacity: scrollOpacity, transformOrigin: 'top center' }}
+      className="relative h-full"
     >
-      <div className="flex items-start justify-between gap-3">
+      <motion.article
+        initial={{ opacity: 0, y: 20 }}
+        animate={{
+          opacity: 1,
+          y: 0,
+          transition: { duration: 0.25, type: 'spring', bounce: 0.1, delay: Math.min(index, 20) * 0.05 },
+        }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        whileHover={{ scale: 1.015, y: -2 }}
+        transition={{ duration: 0.22, ease: 'easeOut' }}
+        ref={cardRef as any}
+        onClick={() => {
+          // While the status dropdown is open, a click on the card only
+          // dismisses the dropdown — it must not open the detail modal.
+          if (statusOpen) {
+            setStatusOpen(false);
+            return;
+          }
+          onOpen(cardRef.current!.getBoundingClientRect());
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (statusOpen) {
+              setStatusOpen(false);
+              return;
+            }
+            onOpen(cardRef.current!.getBoundingClientRect());
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-label={`Open details for ${job.company_name} — ${job.role}`}
+        className={`group relative h-full bg-primary rounded-2xl p-5 cursor-pointer transition-[box-shadow,border-color] duration-300 shadow-card-accent hover:shadow-card-accent-hover flex flex-col gap-3 overflow-visible ${
+          statusOpen ? 'z-30' : ''
+        }`}
+        style={{
+          border: '1px solid rgb(var(--rgb-secondary) / 0.12)',
+          borderRadius: 16,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.borderColor = 'rgba(255, 200, 87, 0.7)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.borderColor = 'rgb(var(--rgb-secondary) / 0.12)';
+        }}
+      >
+      {/* Header — dark band with company, role, and status */}
+      <div className="flex items-start justify-between gap-3 -mx-5 -mt-5 px-5 py-4 bg-secondary rounded-t-2xl">
         <div className="min-w-0 flex-1">
           <h3
-            className="font-display font-bold text-xl text-secondary leading-tight truncate"
+            className="font-display font-bold text-xl text-primary leading-tight truncate"
             title={job.company_name}
           >
             {job.company_name}
           </h3>
-          {job.industry && (
-            <p
-              className="text-xs mt-0.5 truncate"
-              style={{ color: 'rgb(var(--rgb-ink) / 0.6)' }}
-            >
-              {job.industry}
-            </p>
-          )}
+          <p
+            className="text-xs mt-0.5 truncate min-h-[16px]"
+            style={{ color: 'rgb(var(--rgb-on-dark) / 0.7)' }}
+            title={job.industry || 'Not specified'}
+          >
+            {job.industry || '\u00A0'}
+          </p>
         </div>
 
         {/* Status dropdown trigger */}
         <div
-          ref={statusRef}
           className="relative shrink-0"
           onClick={(e) => e.stopPropagation()}
         >
@@ -125,23 +190,29 @@ export function JobCard({
             aria-expanded={statusOpen}
             aria-label={`Change status (current: ${job.status})`}
             title="Change status"
-            className="flex items-center gap-1 rounded-full p-0.5 -m-0.5 hover:bg-secondary/5 transition-colors cursor-pointer"
+            className="flex items-center gap-1 rounded-full pl-1 pr-1.5 py-1 -my-1 -mx-1 bg-white/15 border border-white/40 hover:border-accent hover:bg-white/25 hover:scale-[1.05] transition-all duration-200 ease-out cursor-pointer"
           >
             <StatusBadge status={job.status} />
             <span
               className="inline-flex items-center justify-center w-4 h-4"
-              style={{ color: 'rgb(var(--rgb-ink) / 0.55)' }}
+              style={{ color: 'rgb(var(--rgb-on-dark) / 0.7)' }}
               aria-hidden="true"
             >
               <ChevronDown />
             </span>
           </button>
 
+          <AnimatePresence>
           {statusOpen && (
-            <div
+            <motion.div
+              ref={menuRef as any}
+              initial={{ scaleY: 0, opacity: 0.6 }}
+              animate={{ scaleY: 1, opacity: 1 }}
+              exit={{ scaleY: 0, opacity: 0, transition: { duration: 0.14, ease: 'easeIn' } }}
+              transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.7 }}
               role="menu"
-              className="absolute right-0 mt-2 min-w-[160px] bg-primary rounded-xl shadow-menu z-20 overflow-hidden animate-modal-in"
-              style={{ border: '1px solid rgb(var(--rgb-secondary) / 0.12)' }}
+              className="dropdown-panel absolute right-0 mt-2 min-w-[160px] rounded-xl z-20 overflow-hidden"
+              style={{ transformOrigin: 'top right' }}
             >
               {STATUS_OPTIONS.map((s) => {
                 const isCurrent = s === job.status;
@@ -170,63 +241,70 @@ export function JobCard({
                   </button>
                 );
               })}
-            </div>
+            </motion.div>
           )}
+          </AnimatePresence>
         </div>
       </div>
 
-      <div>
-        <p className="text-sm font-medium text-secondary">{job.role}</p>
-        {job.ctc && (
-          <p
-            className="text-xs mt-0.5"
-            style={{ color: 'rgb(var(--rgb-ink) / 0.55)' }}
-          >
-            {job.ctc}
-          </p>
-        )}
-      </div>
+      <p
+        className="text-base font-semibold text-secondary truncate"
+        title={job.role}
+      >
+        {job.role}
+      </p>
 
-      <div className="flex flex-wrap items-center gap-2 text-xs">
+      <span
+        className="inline-flex items-center gap-1.5 text-xs"
+        style={{ color: 'rgb(var(--rgb-ink) / 0.7)' }}
+      >
+        <MoneyIcon />
+        {job.ctc ? formatCompensationDisplay(job.ctc, job.compensation_period) : 'Not disclosed'}
+      </span>
+
+      <div className="flex flex-wrap items-center gap-3 text-xs">
         <span
-          className="px-2.5 py-0.5 rounded-full font-semibold"
-          style={{
-            background: 'rgba(255, 200, 87, 0.3)',
-            color: 'var(--color-ink)',
-          }}
+          className="inline-flex items-center gap-1.5"
+          style={{ color: 'rgb(var(--rgb-ink) / 0.7)' }}
         >
+          <BriefcaseIcon />
           {job.role_type}
         </span>
-        <span style={{ color: 'rgb(var(--rgb-ink) / 0.6)' }}>
+        <span
+          className="inline-flex items-center gap-1.5"
+          style={{ color: 'rgb(var(--rgb-ink) / 0.7)' }}
+        >
+          <PinIcon />
           {formatLocation(job)}
         </span>
       </div>
 
-      <div className="flex items-end justify-between gap-2 mt-auto -mx-5 -mb-5 px-5 py-3 bg-footer rounded-b-2xl">
-        <div className="flex flex-col gap-1 min-w-0">
+      <div
+        className="mt-auto flex items-center justify-between gap-2 pt-3 min-h-[44px]"
+        style={{ borderTop: '1px solid var(--color-accent)' }}
+      >
+        <span className="flex items-center gap-2 min-w-0">
           <span
-            className="text-xs"
-            style={{ color: 'rgb(var(--rgb-on-dark) / 0.7)' }}
+            className="text-[11px] truncate shrink-0"
+            style={{ color: 'rgb(var(--rgb-ink) / 0.5)' }}
           >
             Applied {formatDateShort(job.date_of_application)}
           </span>
-          {/* Always reserve this row so footer height is identical across cards */}
-          <span
-            className={`inline-flex items-center gap-1 text-xs ${
-              followUp === 'today' || followUp === 'overdue'
-                ? 'animate-pulse'
-                : ''
-            }`}
-            style={{
-              color: followUpColor,
-              visibility: followUp ? 'visible' : 'hidden',
-            }}
-            aria-hidden={!followUp}
-          >
-            <CalendarIcon />
-            Follow-up {followUp ? formatDateShort(job.follow_up_date) : '—'}
-          </span>
-        </div>
+          {/* Simple reminder — the tick-off control lives in the detail modal */}
+          {followUp && !job.follow_up_done && (
+            <span
+              className={`inline-flex items-center gap-1 text-[11px] font-semibold truncate ${
+                followUp === 'today' || followUp === 'overdue'
+                  ? 'animate-pulse'
+                  : ''
+              }`}
+              style={{ color: followUpColor }}
+            >
+              <CalendarIcon />
+              Follow-up {formatDateShort(job.follow_up_date)}
+            </span>
+          )}
+        </span>
 
         <div className="flex items-center gap-1.5 shrink-0">
           {hasJd && (
@@ -235,7 +313,7 @@ export function JobCard({
               onClick={openJd}
               aria-label="Open job description"
               title="Open job description"
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-accent text-secondary transition-all duration-200 ease-out hover:scale-[1.05]"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-accent/45 hover:bg-accent text-[color:var(--color-ink)] hover:text-[#2d3a3a] transition-all duration-200 ease-out hover:scale-[1.05]"
             >
               <ExternalLinkIcon />
               JD
@@ -247,15 +325,16 @@ export function JobCard({
               onClick={downloadResume}
               aria-label="Open resume"
               title="Open resume"
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-accent text-secondary transition-all duration-200 ease-out hover:scale-[1.05]"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-accent/45 hover:bg-accent text-[color:var(--color-ink)] hover:text-[#2d3a3a] transition-all duration-200 ease-out hover:scale-[1.05]"
             >
               <PdfIcon />
               Resume
             </button>
           )}
-        </div>
+          </div>
       </div>
-    </article>
+    </motion.article>
+    </motion.div>
   );
 }
 
@@ -270,6 +349,58 @@ function ChevronDown() {
         strokeLinejoin="round"
         fill="none"
       />
+    </svg>
+  );
+}
+
+function MoneyIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect
+        x="1.5"
+        y="4"
+        width="13"
+        height="8"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+      <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+function BriefcaseIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect
+        x="2"
+        y="5"
+        width="12"
+        height="8.5"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+      <path
+        d="M6 5V3.5A1.5 1.5 0 017.5 2h1A1.5 1.5 0 0110 3.5V5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+    </svg>
+  );
+}
+
+function PinIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M8 14s4.5-3.6 4.5-7A4.5 4.5 0 003.5 7c0 3.4 4.5 7 4.5 7z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <circle cx="8" cy="7" r="1.6" stroke="currentColor" strokeWidth="1.4" />
     </svg>
   );
 }

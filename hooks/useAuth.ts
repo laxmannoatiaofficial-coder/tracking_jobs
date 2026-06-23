@@ -14,23 +14,35 @@ export interface UseAuthResult {
   deleteAccount: () => Promise<void>;
 }
 
+// Module-level session cache. The session resolves once per page load; caching
+// it means a useAuth that mounts later (every navigation remounts AuthGuard, the
+// page, and AppHeader) starts from the known session instead of flashing the
+// auth spinner and re-resolving from scratch. onAuthStateChange keeps it fresh.
+let cachedUser: User | null = null;
+let sessionResolved = false;
+
 export function useAuth(): UseAuthResult {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(cachedUser);
+  const [loading, setLoading] = useState(!sessionResolved);
 
   useEffect(() => {
     let mounted = true;
 
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
-      setUser(data.session?.user ?? null);
+      cachedUser = data.session?.user ?? null;
+      sessionResolved = true;
+      setUser(cachedUser);
       setLoading(false);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      cachedUser = session?.user ?? null;
+      sessionResolved = true;
+      setUser(cachedUser);
+      setLoading(false);
     });
 
     return () => {

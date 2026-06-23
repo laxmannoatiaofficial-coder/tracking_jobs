@@ -79,7 +79,7 @@ export function WatchlistDetailModal({
             onClick={onEdit}
             aria-label="Edit entry"
             title="Edit"
-            className="p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110 transition-all duration-200 ease-out"
+            className="press p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110"
           >
             <PencilIcon />
           </button>
@@ -88,7 +88,7 @@ export function WatchlistDetailModal({
             onClick={onClose}
             aria-label="Close"
             title="Close"
-            className="p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110 transition-all duration-200 ease-out"
+            className="press p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110"
           >
             <CloseIcon />
           </button>
@@ -108,7 +108,7 @@ export function WatchlistDetailModal({
                   href={c.website_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block font-semibold text-secondary underline decoration-accent decoration-2 underline-offset-4 hover:text-accent hover:scale-[1.03] transition-all duration-200 ease-out break-all origin-left"
+                  className="press inline-block font-semibold text-secondary underline decoration-accent decoration-2 underline-offset-4 hover:text-accent hover:scale-[1.03] break-all origin-left"
                 >
                   {isJob ? 'View Job Post →' : 'Open Website →'}
                 </a>
@@ -147,7 +147,7 @@ export function WatchlistDetailModal({
         <button
           type="button"
           onClick={onDelete}
-          className="px-4 py-2 rounded-full text-sm font-semibold border border-[#dc2626] hover:border-accent hover:scale-[1.05] transition-all duration-200 ease-out"
+          className="press px-4 py-2 rounded-full text-sm font-semibold border border-[#dc2626] hover:border-accent hover:scale-[1.05]"
           style={{ color: '#dc2626' }}
         >
           Remove
@@ -156,7 +156,7 @@ export function WatchlistDetailModal({
           <button
             type="button"
             onClick={onEdit}
-            className="px-4 py-2 rounded-full text-sm font-semibold border border-[rgb(var(--rgb-secondary)_/_0.4)] hover:border-accent hover:scale-[1.05] transition-all duration-200 ease-out"
+            className="press px-4 py-2 rounded-full text-sm font-semibold border border-[rgb(var(--rgb-secondary)_/_0.4)] hover:border-accent hover:scale-[1.05]"
             style={{ color: 'var(--color-ink)' }}
           >
             Edit
@@ -165,7 +165,7 @@ export function WatchlistDetailModal({
             type="button"
             onClick={onPromote}
             title="Start an application for this entry"
-            className="px-5 py-2 rounded-full text-sm font-semibold bg-accent text-secondary transition-all duration-200 ease-out hover:scale-[1.03]"
+            className="press px-5 py-2 rounded-full text-sm font-semibold bg-accent text-secondary hover:scale-[1.03]"
           >
             Apply →
           </button>

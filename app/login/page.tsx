@@ -112,7 +112,7 @@ export default function LoginPage() {
             type="button"
             onClick={handleGoogle}
             disabled={googleLoading || submitting}
-            className="w-full flex items-center justify-center gap-3 text-secondary text-sm font-semibold rounded-full px-5 py-3 border border-[rgb(var(--rgb-secondary)_/_0.18)] hover:border-accent transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="press w-full flex items-center justify-center gap-3 text-secondary text-sm font-semibold rounded-full px-5 py-3 border border-[rgb(var(--rgb-secondary)_/_0.18)] hover:border-accent hover:scale-[1.01] disabled:opacity-60 disabled:cursor-not-allowed"
             style={{ background: 'rgb(var(--rgb-dropdown))' }}
           >
             <GoogleLogo />
@@ -176,7 +176,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full cursor-pointer hover:bg-accent/20 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full cursor-pointer hover:bg-accent/20 active:bg-accent/40 transition-colors"
                   style={{ color: 'rgb(var(--rgb-ink) / 0.45)' }}
                 >
                   {showPassword ? <EyeOffIcon /> : <EyeIcon />}
@@ -209,7 +209,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={submitting || googleLoading}
-              className="mt-2 w-full bg-accent text-secondary text-sm font-bold rounded-full px-4 py-3.5 transition-all duration-150 hover:brightness-95 hover:scale-[1.01] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
+              className="press mt-2 w-full bg-accent text-secondary text-sm font-bold rounded-full px-4 py-3.5 hover:brightness-95 hover:scale-[1.01] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
               style={{ boxShadow: '0 4px 16px rgba(255, 200, 87, 0.40)' }}
             >
               {submitting ? (

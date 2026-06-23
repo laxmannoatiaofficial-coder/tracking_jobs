@@ -16,6 +16,8 @@ import {
   STATUS_OPTIONS,
 } from '@/types';
 import { todayIso } from '@/utils/helpers';
+import { extractJob, extractJobFromFile, extractJobFromUrl } from '@/utils/ai';
+import type { ExtractedJob } from '@/utils/ai';
 import { CityCombobox } from './CityCombobox';
 import { Modal } from './Modal';
 import { optionsFrom, SelectField } from './SelectField';
@@ -107,6 +109,42 @@ function jobToForm(job: JobApplication): FormState {
   };
 }
 
+type ResumeMode = 'idle' | 'file' | 'link';
+type JdMode = 'idle' | 'url' | 'text' | 'file';
+
+// Pure: derive the full opening state for a session, so the form can mount
+// already-populated in a single render instead of mounting empty then resetting.
+function deriveOpenState(
+  initialJob: JobApplication | null,
+  prefill?: Partial<JobInput> | null,
+): { form: FormState; resumeMode: ResumeMode; jdMode: JdMode } {
+  const form = initialJob
+    ? jobToForm(initialJob)
+    : {
+        ...emptyForm(),
+        company_name: prefill?.company_name ?? '',
+        role: prefill?.role ?? '',
+        industry: prefill?.industry ?? '',
+        jd_url: prefill?.jd_url ?? '',
+        personal_note: prefill?.personal_note ?? '',
+        ...(prefill?.location_type
+          ? { location_type: prefill.location_type }
+          : {}),
+        location_city: prefill?.location_city ?? '',
+      };
+  const resumeMode: ResumeMode = initialJob?.resume_file_name
+    ? 'file'
+    : initialJob?.resume_url
+      ? 'link'
+      : 'idle';
+  const jdMode: JdMode = initialJob?.jd_text
+    ? 'text'
+    : initialJob?.jd_url || (!initialJob && prefill?.jd_url)
+      ? 'url'
+      : 'idle';
+  return { form, resumeMode, jdMode };
+}
+
 export function AddJobModal({
   open,
   initialJob,
@@ -134,55 +172,100 @@ export function AddJobModal({
   const [jdError, setJdError] = useState<string>('');
   const firstFieldRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  // AI autofill (reads from the Job Description field below).
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState('');
+
+  // Reset the form on the open transition — during render, not in an effect, so
+  // the fields mount once already-populated instead of mounting empty and then
+  // re-rendering with the data (that second render was happening mid-animation).
+  // The `prevOpen` guard makes this fire only when `open` flips.
+  const [prevOpen, setPrevOpen] = useState(false);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
-      setForm(
-        initialJob
-          ? jobToForm(initialJob)
-          : {
-              ...emptyForm(),
-              // Only the fields a watchlist promotion can carry over.
-              company_name: prefill?.company_name ?? '',
-              role: prefill?.role ?? '',
-              industry: prefill?.industry ?? '',
-              jd_url: prefill?.jd_url ?? '',
-              personal_note: prefill?.personal_note ?? '',
-              ...(prefill?.location_type
-                ? { location_type: prefill.location_type }
-                : {}),
-              location_city: prefill?.location_city ?? '',
-            },
-      );
+      const init = deriveOpenState(initialJob, prefill);
+      setForm(init.form);
       setPendingFile(null);
       setErrors({});
       setResumeError('');
       setSubmitError(null);
       setSaving(false);
-      // Resume mode follows existing data
-      if (initialJob?.resume_file_name) {
-        setResumeMode('file');
-      } else if (initialJob?.resume_url) {
-        setResumeMode('link');
-      } else {
-        setResumeMode('idle');
-      }
-      // JD mode: text > url (anything, link or uploaded file URL) > idle
+      setResumeMode(init.resumeMode);
       setPendingJdFile(null);
       setJdError('');
-      if (initialJob?.jd_text) {
-        setJdMode('text');
-      } else if (initialJob?.jd_url || (!initialJob && prefill?.jd_url)) {
-        setJdMode('url');
-      } else {
-        setJdMode('idle');
-      }
-      setTimeout(() => firstFieldRef.current?.focus(), 50);
+      setJdMode(init.jdMode);
+      setAiError('');
+      setAiBusy(false);
     }
-  }, [open, initialJob, prefill]);
+  }
+
+  // Focus the first field shortly after opening (needs the mounted DOM).
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => firstFieldRef.current?.focus(), 50);
+    return () => clearTimeout(t);
+  }, [open]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
+  };
+
+  // Fill the form from whatever JD the user provided. Only overwrites a field
+  // when the AI returned a value for it.
+  const applyExtracted = (d: ExtractedJob) => {
+    const isLocation = (v: string): v is LocationType =>
+      (LOCATION_TYPE_OPTIONS as string[]).includes(v) || v === 'On-site';
+    const isRole = (v: string): v is RoleType =>
+      (ROLE_TYPE_OPTIONS as string[]).includes(v) || v === 'Contract';
+    const isPeriod = (v: string): v is CompensationPeriod =>
+      (COMPENSATION_PERIOD_OPTIONS as string[]).includes(v);
+    setForm((prev) => ({
+      ...prev,
+      company_name: d.company_name || prev.company_name,
+      role: d.role || prev.role,
+      industry: d.industry || prev.industry,
+      location_type: isLocation(d.location_type)
+        ? d.location_type
+        : prev.location_type,
+      location_city: d.location_city || prev.location_city,
+      role_type: isRole(d.role_type) ? d.role_type : prev.role_type,
+      ctc: d.ctc || prev.ctc,
+      compensation_period: isPeriod(d.compensation_period)
+        ? d.compensation_period
+        : prev.compensation_period,
+    }));
+    setErrors({});
+  };
+
+  // Is there a JD to read from any of the three input modes?
+  const hasJdSource =
+    pendingJdFile !== null ||
+    (jdMode === 'text' && form.jd_text.trim() !== '') ||
+    form.jd_url.trim() !== '';
+
+  const runAutofill = async () => {
+    if (aiBusy || !hasJdSource) return;
+    setAiBusy(true);
+    setAiError('');
+    try {
+      let d: ExtractedJob;
+      if (pendingJdFile) {
+        d = await extractJobFromFile(pendingJdFile);
+      } else if (jdMode === 'text' && form.jd_text.trim()) {
+        d = await extractJob(form.jd_text.trim());
+      } else {
+        d = await extractJobFromUrl(form.jd_url.trim());
+      }
+      applyExtracted(d);
+    } catch (err) {
+      setAiError(
+        err instanceof Error ? err.message : 'Autofill failed — try again.',
+      );
+    } finally {
+      setAiBusy(false);
+    }
   };
 
   const validate = (): boolean => {
@@ -381,7 +464,7 @@ export function AddJobModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110 transition-all duration-200 ease-out"
+            className="press p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path
@@ -515,22 +598,59 @@ export function AddJobModal({
               </div>
             </Field>
 
-            <Field label="Job Description" full error={jdError}>
-              {jdMode === 'idle' && (
-                <div
-                  className="flex items-center justify-center gap-3 px-3 py-4 rounded-xl"
-                  style={{ border: '1px dashed rgb(var(--rgb-secondary) / 0.3)' }}
+            <div className="sm:col-span-2 order-first">
+              {/* AI autofill — reads whichever JD you add (link, file, or
+                  pasted text) and fills the whole form. */}
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={runAutofill}
+                  disabled={aiBusy || !hasJdSource}
+                  title={
+                    hasJdSource
+                      ? 'Fill the form from this job description'
+                      : 'Add a link, file, or text below first'
+                  }
+                  className="press inline-flex items-center gap-2 bg-accent text-secondary px-3.5 py-1.5 rounded-full text-xs font-semibold hover:scale-[1.03] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
+                  {aiBusy ? (
+                    <span
+                      className="inline-block w-3 h-3 rounded-full animate-spin"
+                      style={{
+                        border: '2px solid rgb(var(--rgb-secondary) / 0.3)',
+                        borderTopColor: 'var(--color-secondary)',
+                      }}
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <span aria-hidden="true">✨</span>
+                  )}
+                  {aiBusy ? 'Reading the JD…' : 'Autofill the form with AI'}
+                </button>
+                <span
+                  className="text-[11px]"
+                  style={{ color: 'rgb(var(--rgb-ink) / 0.55)' }}
+                >
+                  Add a link, file, or text below — then autofill.
+                </span>
+                {aiError && (
                   <span
-                    className="text-xs"
-                    style={{ color: 'rgb(var(--rgb-ink) / 0.65)' }}
+                    className="text-[11px] w-full"
+                    style={{ color: '#dc2626' }}
                   >
-                    Add a JD:
+                    {aiError}
+                  </span>
+                )}
+              </div>
+              {jdMode === 'idle' && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-sm font-medium text-secondary">
+                    Add Job Description:
                   </span>
                   <button
                     type="button"
                     onClick={() => setJdMode('url')}
-                    className="flex items-center justify-center w-11 h-11 rounded-xl border border-transparent hover:border-accent transition-all duration-200 ease-out hover:scale-[1.05]"
+                    className="press flex items-center justify-center w-11 h-11 rounded-xl border border-transparent hover:border-accent hover:scale-[1.05]"
                     style={{ background: 'rgba(255, 200, 87, 0.3)' }}
                     title="Paste a URL"
                     aria-label="Paste a URL"
@@ -540,7 +660,7 @@ export function AddJobModal({
                   <button
                     type="button"
                     onClick={() => setJdMode('text')}
-                    className="flex items-center justify-center w-11 h-11 rounded-xl border border-transparent hover:border-accent transition-all duration-200 ease-out hover:scale-[1.05]"
+                    className="press flex items-center justify-center w-11 h-11 rounded-xl border border-transparent hover:border-accent hover:scale-[1.05]"
                     style={{ background: 'rgba(255, 200, 87, 0.3)' }}
                     title="Paste JD text"
                     aria-label="Paste JD text"
@@ -548,7 +668,7 @@ export function AddJobModal({
                     <TextIcon />
                   </button>
                   <label
-                    className="flex items-center justify-center w-11 h-11 rounded-xl cursor-pointer border border-transparent hover:border-accent transition-all duration-200 ease-out hover:scale-[1.05]"
+                    className="press flex items-center justify-center w-11 h-11 rounded-xl cursor-pointer border border-transparent hover:border-accent hover:scale-[1.05]"
                     style={{ background: 'rgba(255, 200, 87, 0.3)' }}
                     title="Upload document (max 5MB)"
                     aria-label="Upload document"
@@ -577,7 +697,7 @@ export function AddJobModal({
                   <button
                     type="button"
                     onClick={clearJd}
-                    className="shrink-0 flex items-center justify-center w-10 rounded-xl border border-[rgb(var(--rgb-secondary)_/_0.25)] hover:border-accent hover:bg-accent/25 hover:scale-[1.05] transition-all duration-200 ease-out"
+                    className="press shrink-0 flex items-center justify-center w-10 rounded-xl border border-[rgb(var(--rgb-secondary)_/_0.25)] hover:border-accent hover:bg-accent/25 hover:scale-[1.05]"
                     title="Cancel"
                     aria-label="Cancel"
                   >
@@ -599,7 +719,7 @@ export function AddJobModal({
                   <button
                     type="button"
                     onClick={clearJd}
-                    className="text-xs font-semibold px-3 py-1 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-[1.08] transition-all duration-200 ease-out"
+                    className="press text-xs font-semibold px-3 py-1 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-[1.08]"
                     style={{ color: '#dc2626' }}
                   >
                     Clear and start over
@@ -622,7 +742,7 @@ export function AddJobModal({
                   </span>
                   <div className="flex items-center gap-2 shrink-0">
                     <label
-                      className="inline-block text-xs cursor-pointer px-2 py-1 rounded-full border border-transparent hover:border-accent transition-all duration-200 ease-out hover:bg-accent/25 hover:scale-[1.08] font-semibold"
+                      className="press inline-block text-xs cursor-pointer px-2 py-1 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-[1.08] font-semibold"
                       style={{ color: 'var(--color-ink)' }}
                     >
                       Replace
@@ -636,7 +756,7 @@ export function AddJobModal({
                     <button
                       type="button"
                       onClick={clearJd}
-                      className="text-xs px-2 py-1 rounded-full border border-transparent hover:border-accent transition-all duration-200 ease-out hover:bg-accent/25 hover:scale-[1.08] font-semibold"
+                      className="press text-xs px-2 py-1 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-[1.08] font-semibold"
                       style={{ color: '#dc2626' }}
                       title="Remove (and switch input option)"
                     >
@@ -645,22 +765,21 @@ export function AddJobModal({
                   </div>
                 </div>
               )}
-            </Field>
+              {jdError && (
+                <p className="text-xs mt-1" style={{ color: '#dc2626' }}>
+                  {jdError}
+                </p>
+              )}
+            </div>
 
-            <Field label="Resume" full error={resumeError}>
+            <div className="sm:col-span-2 order-first">
               {resumeMode === 'idle' && (
-                <div
-                  className="flex items-center justify-center gap-3 px-3 py-4 rounded-xl"
-                  style={{ border: '1px dashed rgb(var(--rgb-secondary) / 0.3)' }}
-                >
-                  <span
-                    className="text-xs"
-                    style={{ color: 'rgb(var(--rgb-ink) / 0.65)' }}
-                  >
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-sm font-medium text-secondary">
                     Add your resume:
                   </span>
                   <label
-                    className="flex items-center justify-center w-11 h-11 rounded-xl cursor-pointer border border-transparent hover:border-accent transition-all duration-200 ease-out hover:scale-[1.05]"
+                    className="press flex items-center justify-center w-11 h-11 rounded-xl cursor-pointer border border-transparent hover:border-accent hover:scale-[1.05]"
                     style={{ background: 'rgba(255, 200, 87, 0.3)' }}
                     title="Upload PDF (max 5MB)"
                     aria-label="Upload PDF"
@@ -676,7 +795,7 @@ export function AddJobModal({
                   <button
                     type="button"
                     onClick={() => setResumeMode('link')}
-                    className="flex items-center justify-center w-11 h-11 rounded-xl border border-transparent hover:border-accent transition-all duration-200 ease-out hover:scale-[1.05]"
+                    className="press flex items-center justify-center w-11 h-11 rounded-xl border border-transparent hover:border-accent hover:scale-[1.05]"
                     style={{ background: 'rgba(255, 200, 87, 0.3)' }}
                     title="Paste a link"
                     aria-label="Paste a link"
@@ -700,7 +819,7 @@ export function AddJobModal({
                   </span>
                   <div className="flex items-center gap-2 shrink-0">
                     <label
-                      className="inline-block text-xs cursor-pointer px-2 py-1 rounded-full border border-transparent hover:border-accent transition-all duration-200 ease-out hover:bg-accent/25 hover:scale-[1.08] font-semibold"
+                      className="press inline-block text-xs cursor-pointer px-2 py-1 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-[1.08] font-semibold"
                       style={{ color: 'var(--color-ink)' }}
                     >
                       Replace
@@ -714,7 +833,7 @@ export function AddJobModal({
                     <button
                       type="button"
                       onClick={clearResume}
-                      className="text-xs px-2 py-1 rounded-full border border-transparent hover:border-accent transition-all duration-200 ease-out hover:bg-accent/25 hover:scale-[1.08] font-semibold"
+                      className="press text-xs px-2 py-1 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-[1.08] font-semibold"
                       style={{ color: '#dc2626' }}
                       title="Remove (and switch to link option)"
                     >
@@ -737,7 +856,7 @@ export function AddJobModal({
                   <button
                     type="button"
                     onClick={clearLink}
-                    className="shrink-0 flex items-center justify-center w-10 rounded-xl border border-[rgb(var(--rgb-secondary)_/_0.25)] hover:border-accent hover:bg-accent/25 hover:scale-[1.05] transition-all duration-200 ease-out"
+                    className="press shrink-0 flex items-center justify-center w-10 rounded-xl border border-[rgb(var(--rgb-secondary)_/_0.25)] hover:border-accent hover:bg-accent/25 hover:scale-[1.05]"
                     title="Cancel (back to upload option)"
                     aria-label="Cancel link"
                   >
@@ -745,7 +864,12 @@ export function AddJobModal({
                   </button>
                 </div>
               )}
-            </Field>
+              {resumeError && (
+                <p className="text-xs mt-1" style={{ color: '#dc2626' }}>
+                  {resumeError}
+                </p>
+              )}
+            </div>
 
             <Field label="Personal Note" full>
               <textarea
@@ -782,7 +906,7 @@ export function AddJobModal({
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 rounded-full text-sm font-semibold border border-[rgb(var(--rgb-secondary)_/_0.4)] hover:border-accent hover:scale-[1.05] transition-all duration-200 ease-out disabled:opacity-50 disabled:hover:scale-100"
+            className="press px-4 py-2 rounded-full text-sm font-semibold border border-[rgb(var(--rgb-secondary)_/_0.4)] hover:border-accent hover:scale-[1.05] disabled:opacity-50 disabled:hover:scale-100"
             style={{ color: 'var(--color-ink)' }}
           >
             Cancel
@@ -790,7 +914,7 @@ export function AddJobModal({
           <button
             type="submit"
             disabled={!isValid || saving}
-            className="px-5 py-2 rounded-full text-sm font-semibold bg-accent text-secondary transition-all duration-200 ease-out hover:scale-[1.03] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
+            className="press px-5 py-2 rounded-full text-sm font-semibold bg-accent text-secondary hover:scale-[1.03] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
           >
             {saving && (
               <span

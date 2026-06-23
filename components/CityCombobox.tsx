@@ -41,15 +41,13 @@ export function CityCombobox({
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
   const [pos, setPos] = useState<PanelPos | null>(null);
-  const [mounted, setMounted] = useState(false);
+  // True from first client render (the portal list only renders once `pos` is
+  // set on open, so no SSR mismatch) — avoids a wasted re-render on mount.
+  const [mounted] = useState(() => typeof window !== 'undefined');
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const filtered = useMemo(() => {
     const q = value.trim().toLowerCase();

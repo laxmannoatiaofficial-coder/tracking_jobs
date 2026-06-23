@@ -117,11 +117,33 @@ type JobsPatch =
   | { kind: 'upsert'; job: JobApplication; sourceId: string }
   | { kind: 'delete'; id: string; sourceId: string };
 
+// SWR-lite cache shared across every useJobs instance. The dashboard mounts
+// useJobs twice (grid + header bell) and remounts it on each navigation; without
+// this, every mount fires its own full query. `inflight` collapses concurrent
+// mounts onto one request; `cache` lets a fresh mount paint instantly (and skip
+// the network entirely while still fresh).
+const JOBS_TTL_MS = 30_000;
+const jobsCache = new Map<string, { rows: JobApplication[]; ts: number }>();
+const jobsInflight = new Map<string, Promise<JobApplication[]>>();
+
 export function useJobs(user: User | null): UseJobsResult {
   const [jobs, setJobs] = useState<JobApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const instanceId = useState(() => Math.random().toString(36).slice(2))[0];
+
+  // Update local state and the shared cache in lockstep, so a later mount reads
+  // the post-mutation rows instead of a stale snapshot.
+  const applyLocal = useCallback(
+    (updater: (prev: JobApplication[]) => JobApplication[]) => {
+      setJobs((prev) => {
+        const next = updater(prev);
+        if (user) jobsCache.set(user.id, { rows: next, ts: Date.now() });
+        return next;
+      });
+    },
+    [user],
+  );
 
   const broadcast = useCallback(
     (
@@ -144,9 +166,9 @@ export function useJobs(user: User | null): UseJobsResult {
       const d = (e as CustomEvent<JobsPatch>).detail;
       if (!d || d.sourceId === instanceId) return;
       if (d.kind === 'delete') {
-        setJobs((prev) => prev.filter((j) => j.id !== d.id));
+        applyLocal((prev) => prev.filter((j) => j.id !== d.id));
       } else {
-        setJobs((prev) =>
+        applyLocal((prev) =>
           prev.some((j) => j.id === d.job.id)
             ? prev.map((j) => (j.id === d.job.id ? d.job : j))
             : [d.job, ...prev],
@@ -155,33 +177,59 @@ export function useJobs(user: User | null): UseJobsResult {
     };
     window.addEventListener(JOBS_EVENT, onPatch);
     return () => window.removeEventListener(JOBS_EVENT, onPatch);
-  }, [instanceId]);
+  }, [instanceId, applyLocal]);
 
-  const fetchJobs = useCallback(async () => {
-    if (!user) {
-      setJobs([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    const { data, error: err } = await supabase
-      .from('job_applications')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    if (err) {
-      setError(err.message);
-      setJobs([]);
-    } else {
-      setJobs(
-        (data ?? []).map((row) =>
-          normalizeJobCompensation(row as JobApplication),
-        ),
-      );
-    }
-    setLoading(false);
-  }, [user]);
+  const fetchJobs = useCallback(
+    async (opts?: { force?: boolean }) => {
+      if (!user) {
+        setJobs([]);
+        setLoading(false);
+        return;
+      }
+      const force = opts?.force ?? false;
+      const cached = jobsCache.get(user.id);
+
+      // Paint cached rows immediately; skip the network if still fresh.
+      if (cached) {
+        setJobs(cached.rows);
+        setLoading(false);
+        if (!force && Date.now() - cached.ts < JOBS_TTL_MS) return;
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
+      // Collapse concurrent requests for the same user onto one query.
+      let inflight = jobsInflight.get(user.id);
+      if (!inflight || force) {
+        inflight = (async () => {
+          const { data, error: err } = await supabase
+            .from('job_applications')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+          if (err) throw err;
+          return (data ?? []).map((row) =>
+            normalizeJobCompensation(row as JobApplication),
+          );
+        })();
+        jobsInflight.set(user.id, inflight);
+      }
+
+      try {
+        const rows = await inflight;
+        jobsCache.set(user.id, { rows, ts: Date.now() });
+        setJobs(rows);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not load applications');
+        if (!cached) setJobs([]);
+      } finally {
+        if (jobsInflight.get(user.id) === inflight) jobsInflight.delete(user.id);
+        setLoading(false);
+      }
+    },
+    [user],
+  );
 
   useEffect(() => {
     void fetchJobs();
@@ -264,11 +312,11 @@ export function useJobs(user: User | null): UseJobsResult {
         jd_url: jdUrl,
         user_id: user.id,
       });
-      setJobs((prev) => [row, ...prev]);
+      applyLocal((prev) => [row, ...prev]);
       broadcast({ kind: 'upsert', job: row });
       return warning;
     },
-    [user, persistJob, broadcast],
+    [user, persistJob, broadcast, applyLocal],
   );
 
   const editJob = useCallback(
@@ -290,11 +338,11 @@ export function useJobs(user: User | null): UseJobsResult {
         patch.jd_url = uploaded.url;
       }
       const { row, warning } = await persistJob('update', patch, id);
-      setJobs((prev) => prev.map((j) => (j.id === id ? row : j)));
+      applyLocal((prev) => prev.map((j) => (j.id === id ? row : j)));
       broadcast({ kind: 'upsert', job: row });
       return warning;
     },
-    [user, persistJob, broadcast],
+    [user, persistJob, broadcast, applyLocal],
   );
 
   const deleteJob = useCallback(
@@ -305,17 +353,17 @@ export function useJobs(user: User | null): UseJobsResult {
         .delete()
         .eq('id', id);
       if (err) throw err;
-      setJobs((prev) => prev.filter((j) => j.id !== id));
+      applyLocal((prev) => prev.filter((j) => j.id !== id));
       broadcast({ kind: 'delete', id });
     },
-    [user, broadcast],
+    [user, broadcast, applyLocal],
   );
 
   return {
     jobs,
     loading,
     error,
-    refetch: fetchJobs,
+    refetch: useCallback(() => fetchJobs({ force: true }), [fetchJobs]),
     addJob,
     editJob,
     deleteJob,

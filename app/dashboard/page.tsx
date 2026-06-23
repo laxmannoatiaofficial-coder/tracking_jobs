@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import type {
   JobApplication,
   JobInput,
@@ -16,11 +17,23 @@ import { JobCard } from '@/components/JobCard';
 import { StatusTabs } from '@/components/StatusTabs';
 import { SortControl } from '@/components/SortControl';
 import { EmptyState } from '@/components/EmptyState';
-import { AddJobModal } from '@/components/AddJobModal';
-import { JobDetailModal } from '@/components/JobDetailModal';
-import { DeleteConfirmModal } from '@/components/DeleteConfirmModal';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// Modals are code-split: their JS loads on demand instead of shipping in the
+// dashboard's initial bundle, so landing on the page downloads/parses less.
+const AddJobModal = dynamic(
+  () => import('@/components/AddJobModal').then((m) => m.AddJobModal),
+  { ssr: false },
+);
+const JobDetailModal = dynamic(
+  () => import('@/components/JobDetailModal').then((m) => m.JobDetailModal),
+  { ssr: false },
+);
+const DeleteConfirmModal = dynamic(
+  () => import('@/components/DeleteConfirmModal').then((m) => m.DeleteConfirmModal),
+  { ssr: false },
+);
 
 type ModalState =
   | { kind: 'closed' }
@@ -46,14 +59,18 @@ export default function DashboardPage() {
 function Dashboard() {
   const { user } = useAuth();
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const pushToast = (message: string, tone: 'error' | 'info' = 'info') => {
-    const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, message, tone }]);
-    setTimeout(
-      () => setToasts((prev) => prev.filter((t) => t.id !== id)),
-      4000,
-    );
-  };
+  // Stable identity so it can be a dependency of the memoized card handlers.
+  const pushToast = useCallback(
+    (message: string, tone: 'error' | 'info' = 'info') => {
+      const id = Date.now() + Math.random();
+      setToasts((prev) => [...prev, { id, message, tone }]);
+      setTimeout(
+        () => setToasts((prev) => prev.filter((t) => t.id !== id)),
+        4000,
+      );
+    },
+    [],
+  );
 
   const {
     jobs,
@@ -68,6 +85,9 @@ function Dashboard() {
   const [filter, setFilter] = useState<StatusFilter>('All');
   const [sort, setSort] = useState<SortOption>('date-desc');
   const [search, setSearch] = useState('');
+  // Filtering runs against a deferred copy of the query so each keystroke keeps
+  // the input responsive — the heavy grid re-render happens at lower priority.
+  const deferredSearch = useDeferredValue(search);
   const [modal, setModal] = useState<ModalState>({ kind: 'closed' });
   const [promotePrefill, setPromotePrefill] = useState<Partial<JobInput> | null>(null);
   // Job id the notification bell asked us to open (resolved once jobs load).
@@ -146,7 +166,7 @@ function Dashboard() {
   }, [error]);
 
   const visibleJobs = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     const filtered = jobs.filter((j) => {
       if (filter !== 'All' && j.status !== filter) return false;
       if (q) {
@@ -173,7 +193,55 @@ function Dashboard() {
       }
     });
     return sorted;
-  }, [jobs, filter, sort, search]);
+  }, [jobs, filter, sort, deferredSearch]);
+
+  // Progressive rendering. Paint a generous first batch (a full 3×3 grid plus a
+  // buffered row), then stop — the rest load only as the user scrolls to the
+  // bottom, where a brief loading animation plays before each new batch reveals.
+  const INITIAL_COUNT = 12; // 9 visible (3×3) + 3 buffered just below the fold
+  const LOAD_BATCH = 6; // cards revealed per scroll-triggered load
+  const LOAD_DELAY = 550; // ms — long enough for the spinner to register
+  const [visibleCount, setVisibleCount] = useState(INITIAL_COUNT);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  // Restart from the first batch whenever the filtered/sorted list changes.
+  useEffect(() => {
+    setVisibleCount(INITIAL_COUNT);
+    setLoadingMore(false);
+  }, [filter, sort, deferredSearch]);
+
+  const shownJobs = visibleJobs.slice(0, visibleCount);
+  const hasMore = visibleCount < visibleJobs.length;
+
+  // When the sentinel reaches the viewport, show the spinner briefly, then
+  // reveal the next batch. A short rootMargin means it triggers near the bottom
+  // (so the loading animation is actually seen), not far ahead.
+  useEffect(() => {
+    if (!hasMore) return;
+    const el = loadMoreRef.current;
+    if (!el) return;
+    let timer: ReturnType<typeof setTimeout>;
+    let triggered = false;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !triggered) {
+          triggered = true;
+          setLoadingMore(true);
+          timer = setTimeout(() => {
+            setVisibleCount((c) => Math.min(c + LOAD_BATCH, visibleJobs.length));
+            setLoadingMore(false);
+          }, LOAD_DELAY);
+        }
+      },
+      { rootMargin: '120px 0px' },
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      clearTimeout(timer);
+    };
+  }, [hasMore, visibleCount, visibleJobs.length]);
 
   // Keep detail modal in sync with edits / deletions
   useEffect(() => {
@@ -209,19 +277,33 @@ function Dashboard() {
     }
   };
 
-  const handleStatusChange = async (id: string, status: JobStatus) => {
-    try {
-      await editJob(id, { status });
-    } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : typeof err === 'object' && err !== null && 'message' in err
-            ? String((err as { message: unknown }).message)
-            : 'Could not update status';
-      pushToast(msg, 'error');
-    }
-  };
+  // Stable handlers passed to every (memoized) JobCard. Because their identity
+  // never changes, cards only re-render when their own data changes — not on
+  // every keystroke / modal toggle / toast.
+  const handleOpenDetail = useCallback((job: JobApplication, rect: DOMRect) => {
+    setModal({ kind: 'detail', job, originRect: rect });
+  }, []);
+
+  const handleOpenJd = useCallback((job: JobApplication, rect: DOMRect) => {
+    setModal({ kind: 'detail', job, focusJd: true, originRect: rect });
+  }, []);
+
+  const handleStatusChange = useCallback(
+    async (id: string, status: JobStatus) => {
+      try {
+        await editJob(id, { status });
+      } catch (err) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : typeof err === 'object' && err !== null && 'message' in err
+              ? String((err as { message: unknown }).message)
+              : 'Could not update status';
+        pushToast(msg, 'error');
+      }
+    },
+    [editJob, pushToast],
+  );
 
   const handleFollowUpToggle = async (id: string, done: boolean) => {
     try {
@@ -320,9 +402,9 @@ function Dashboard() {
         ) : visibleJobs.length === 0 ? (
           error ? (
             <ErrorState onRetry={() => void refetch()} message={error} />
-          ) : search.trim() ? (
+          ) : deferredSearch.trim() ? (
             <NoSearchResults
-              query={search.trim()}
+              query={deferredSearch.trim()}
               onClear={() => setSearch('')}
             />
           ) : (
@@ -332,26 +414,43 @@ function Dashboard() {
             />
           )
         ) : (
+          <>
           <motion.div
             layout
-            key={`${filter}-${sort}-${search}`}
             className="grid gap-5 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 animate-grid-fade"
           >
             <AnimatePresence mode="popLayout">
-            {visibleJobs.map((job, idx) => (
+            {shownJobs.map((job, idx) => (
               <JobCard
                 key={job.id}
                 job={job}
                 index={idx}
-                onOpen={(rect) => setModal({ kind: 'detail', job, originRect: rect })}
-                onOpenJd={(rect) =>
-                  setModal({ kind: 'detail', job, focusJd: true, originRect: rect })
-                }
+                onOpen={handleOpenDetail}
+                onOpenJd={handleOpenJd}
                 onStatusChange={handleStatusChange}
               />
             ))}
             </AnimatePresence>
           </motion.div>
+
+          {/* Infinite-scroll sentinel — loads the next page just before it's
+              reached, with a spinner so the wait (if any) reads as intentional. */}
+          {hasMore && (
+            <div
+              ref={loadMoreRef}
+              className="flex justify-center py-8"
+              aria-hidden="true"
+            >
+              <div
+                className="w-6 h-6 rounded-full animate-spin"
+                style={{
+                  border: '3px solid rgb(var(--rgb-secondary) / 0.15)',
+                  borderTopColor: 'var(--color-accent)',
+                }}
+              />
+            </div>
+          )}
+          </>
         )}
       </main>
 
@@ -375,6 +474,8 @@ function Dashboard() {
         onFollowUpToggle={handleFollowUpToggle}
         onClose={() => setModal({ kind: 'closed' })}
         onEdit={() =>
+          // Open edit with the light fade+scale path (no card-origin FLIP morph),
+          // so the swap from the detail modal stays cheap and smooth.
           modal.kind === 'detail' && setModal({ kind: 'edit', job: modal.job })
         }
         onDelete={() =>
@@ -457,7 +558,7 @@ function NoSearchResults({
       <button
         type="button"
         onClick={onClear}
-        className="inline-flex items-center gap-2 bg-accent text-secondary px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 ease-out hover:scale-[1.03]"
+        className="press inline-flex items-center gap-2 bg-accent text-secondary px-5 py-2.5 rounded-full text-sm font-semibold hover:scale-[1.03]"
       >
         Clear search
       </button>
@@ -486,7 +587,7 @@ function ErrorState({
       <button
         type="button"
         onClick={onRetry}
-        className="inline-flex items-center gap-2 bg-accent text-secondary px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 ease-out hover:scale-[1.03]"
+        className="press inline-flex items-center gap-2 bg-accent text-secondary px-5 py-2.5 rounded-full text-sm font-semibold hover:scale-[1.03]"
       >
         Retry
       </button>

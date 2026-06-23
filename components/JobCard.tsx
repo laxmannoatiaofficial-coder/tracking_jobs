@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { JobApplication, JobStatus } from '@/types';
 import { STATUS_OPTIONS } from '@/types';
@@ -10,17 +10,18 @@ import {
   formatLocation,
   getFollowUpState,
 } from '@/utils/helpers';
+import { popoverReveal } from '@/utils/motion';
 import { StatusBadge } from './StatusBadge';
 
 interface JobCardProps {
   job: JobApplication;
   index: number;
-  onOpen: (rect: DOMRect) => void;
-  onOpenJd: (rect: DOMRect) => void;
+  onOpen: (job: JobApplication, rect: DOMRect) => void;
+  onOpenJd: (job: JobApplication, rect: DOMRect) => void;
   onStatusChange: (id: string, status: JobStatus) => void;
 }
 
-export function JobCard({
+function JobCardComponent({
   job,
   index,
   onOpen,
@@ -88,7 +89,7 @@ export function JobCard({
     e.stopPropagation();
     // Text JD opens the detail modal (auto-expanded); URL JD opens in a new tab.
     if (job.jd_text) {
-      onOpenJd(cardRef.current!.getBoundingClientRect());
+      onOpenJd(job, cardRef.current!.getBoundingClientRect());
     } else if (job.jd_url) {
       window.open(job.jd_url, '_blank', 'noopener,noreferrer');
     }
@@ -101,7 +102,7 @@ export function JobCard({
         animate={{
           opacity: 1,
           y: 0,
-          transition: { duration: 0.25, type: 'spring', bounce: 0.1, delay: Math.min(index, 20) * 0.05 },
+          transition: { duration: 0.25, type: 'spring', bounce: 0.1, delay: Math.min(index, 8) * 0.04 },
         }}
         exit={{ opacity: 0, scale: 0.95 }}
         // Acko-style subtle hover: a clean 4px lift, no scale, slow 0.4s `ease`.
@@ -115,7 +116,7 @@ export function JobCard({
             setStatusOpen(false);
             return;
           }
-          onOpen(cardRef.current!.getBoundingClientRect());
+          onOpen(job, cardRef.current!.getBoundingClientRect());
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -124,7 +125,7 @@ export function JobCard({
               setStatusOpen(false);
               return;
             }
-            onOpen(cardRef.current!.getBoundingClientRect());
+            onOpen(job, cardRef.current!.getBoundingClientRect());
           }
         }}
         tabIndex={0}
@@ -177,7 +178,7 @@ export function JobCard({
             aria-expanded={statusOpen}
             aria-label={`Change status (current: ${job.status})`}
             title="Change status"
-            className="flex items-center gap-1 rounded-full pl-1 pr-1.5 py-1 -my-1 -mx-1 bg-white/15 border border-white/40 hover:border-accent hover:bg-white/25 hover:scale-[1.05] transition-all duration-200 ease-out cursor-pointer"
+            className="press flex items-center gap-1 rounded-full pl-1 pr-1.5 py-1 -my-1 -mx-1 bg-white/15 border border-white/40 hover:border-accent hover:bg-white/25 hover:scale-[1.05] cursor-pointer"
           >
             <StatusBadge status={job.status} />
             <span
@@ -193,10 +194,10 @@ export function JobCard({
           {statusOpen && (
             <motion.div
               ref={menuRef as any}
-              initial={{ scaleY: 0, opacity: 0.6 }}
-              animate={{ scaleY: 1, opacity: 1 }}
-              exit={{ scaleY: 0, opacity: 0, transition: { duration: 0.14, ease: 'easeIn' } }}
-              transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.7 }}
+              variants={popoverReveal}
+              initial="initial"
+              animate="animate"
+              exit="exit"
               role="menu"
               className="dropdown-panel absolute right-0 mt-2 min-w-[160px] rounded-xl z-20 overflow-hidden"
               style={{ transformOrigin: 'top right' }}
@@ -213,7 +214,7 @@ export function JobCard({
                       setStatusOpen(false);
                       if (!isCurrent) onStatusChange(job.id, s);
                     }}
-                    className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/15"
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/15 active:bg-accent/30"
                   >
                     <StatusBadge status={s} />
                     {isCurrent && (
@@ -300,7 +301,7 @@ export function JobCard({
               onClick={openJd}
               aria-label="Open job description"
               title="Open job description"
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-accent/45 hover:bg-accent text-[color:var(--color-ink)] hover:text-[#2d3a3a] transition-all duration-200 ease-out hover:scale-[1.05]"
+              className="press inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-accent/45 hover:bg-accent text-[color:var(--color-ink)] hover:text-[#2d3a3a] hover:scale-[1.05]"
             >
               <ExternalLinkIcon />
               JD
@@ -312,7 +313,7 @@ export function JobCard({
               onClick={downloadResume}
               aria-label="Open resume"
               title="Open resume"
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-accent/45 hover:bg-accent text-[color:var(--color-ink)] hover:text-[#2d3a3a] transition-all duration-200 ease-out hover:scale-[1.05]"
+              className="press inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-accent/45 hover:bg-accent text-[color:var(--color-ink)] hover:text-[#2d3a3a] hover:scale-[1.05]"
             >
               <PdfIcon />
               Resume
@@ -324,6 +325,10 @@ export function JobCard({
     </div>
   );
 }
+
+// Memoized: with stable handlers from the dashboard, a card only re-renders when
+// its own `job` / `index` actually change — not on every unrelated page update.
+export const JobCard = memo(JobCardComponent);
 
 function ChevronDown() {
   return (

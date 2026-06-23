@@ -186,7 +186,7 @@ function Watchlist() {
                   key={k}
                   type="button"
                   onClick={() => setKindFilter(k)}
-                  className={`whitespace-nowrap px-3.5 py-1.5 rounded-full text-sm transition-all duration-200 ease-out ${
+                  className={`press whitespace-nowrap px-3.5 py-1.5 rounded-full text-sm ${
                     kindFilter === k
                       ? 'bg-accent font-semibold text-[#2d3a3a]'
                       : 'font-medium text-secondary border border-[rgb(var(--rgb-secondary)_/_0.25)] bg-primary hover:border-accent hover:scale-[1.03]'
@@ -488,7 +488,7 @@ function CompanyCard({
                   ? 'Open job post'
                   : 'Open website'
               }
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-accent/45 hover:bg-accent text-[color:var(--color-ink)] hover:text-[#2d3a3a] transition-all duration-200 ease-out hover:scale-[1.05]"
+              className="press inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-accent/45 hover:bg-accent text-[color:var(--color-ink)] hover:text-[#2d3a3a] hover:scale-[1.05]"
             >
               <ExternalLinkIcon />
               {(company.kind ?? 'Company') === 'Job' ? 'Post' : 'Site'}
@@ -501,7 +501,7 @@ function CompanyCard({
               onPromote();
             }}
             title="Start an application for this company"
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-accent/45 hover:bg-accent text-[color:var(--color-ink)] hover:text-[#2d3a3a] transition-all duration-200 ease-out hover:scale-[1.05]"
+            className="press inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-accent/45 hover:bg-accent text-[color:var(--color-ink)] hover:text-[#2d3a3a] hover:scale-[1.05]"
           >
             Apply →
           </button>
@@ -536,7 +536,7 @@ function CenteredMessage({
       <button
         type="button"
         onClick={onAction}
-        className="inline-flex items-center gap-2 bg-accent text-secondary px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 ease-out hover:scale-[1.03]"
+        className="press inline-flex items-center gap-2 bg-accent text-secondary px-5 py-2.5 rounded-full text-sm font-semibold hover:scale-[1.03]"
       >
         {actionLabel}
       </button>
@@ -619,7 +619,7 @@ function NoSearchResults({
       <button
         type="button"
         onClick={onClear}
-        className="inline-flex items-center gap-2 bg-accent text-secondary px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 ease-out hover:scale-[1.03]"
+        className="press inline-flex items-center gap-2 bg-accent text-secondary px-5 py-2.5 rounded-full text-sm font-semibold hover:scale-[1.03]"
       >
         Clear search
       </button>

@@ -95,7 +95,7 @@ export function DeleteAccountModal({
             type="button"
             onClick={onCancel}
             disabled={submitting}
-            className="px-4 py-2 rounded-full text-sm font-semibold border border-[rgb(var(--rgb-secondary)_/_0.4)] hover:border-accent hover:scale-[1.05] transition-all duration-200 ease-out disabled:opacity-50 disabled:hover:scale-100"
+            className="press px-4 py-2 rounded-full text-sm font-semibold border border-[rgb(var(--rgb-secondary)_/_0.4)] hover:border-accent hover:scale-[1.05] disabled:opacity-50 disabled:hover:scale-100"
             style={{ color: 'var(--color-ink)' }}
           >
             Cancel
@@ -104,7 +104,7 @@ export function DeleteAccountModal({
             type="button"
             onClick={handleConfirm}
             disabled={!canConfirm}
-            className="px-4 py-2 rounded-full text-sm font-semibold text-white border border-transparent hover:border-accent hover:opacity-90 hover:scale-[1.05] transition-all duration-200 ease-out disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
+            className="press px-4 py-2 rounded-full text-sm font-semibold text-white border border-transparent hover:border-accent hover:opacity-90 hover:scale-[1.05] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
             style={{ background: '#dc2626' }}
           >
             {submitting && (

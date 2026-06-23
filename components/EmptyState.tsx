@@ -28,7 +28,7 @@ export function EmptyState({ filter, onAdd }: EmptyStateProps) {
       <button
         type="button"
         onClick={onAdd}
-        className="inline-flex items-center gap-2 bg-accent text-secondary px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 ease-out hover:scale-[1.03]"
+        className="press inline-flex items-center gap-2 bg-accent text-secondary px-5 py-2.5 rounded-full text-sm font-semibold hover:scale-[1.03]"
       >
         <span aria-hidden="true">+</span> Add Application
       </button>

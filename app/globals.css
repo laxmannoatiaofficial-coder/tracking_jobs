@@ -37,16 +37,16 @@
   /* Layered card elevation — swapped in .dark because teal-tinted shadows
      disappear on the near-black page; dark mode needs pure black + a
      stronger top highlight instead. */
+  /* Two blurred layers (down from three, smaller radii) keep the depth while
+     cutting paint cost on scroll/hover. The accent bar + top highlight stay. */
   --shadow-card-accent:
-    0 1px 2px rgb(var(--rgb-secondary) / 0.10),
-    0 4px 12px rgb(var(--rgb-secondary) / 0.10),
-    0 14px 32px rgb(var(--rgb-secondary) / 0.12),
+    0 2px 8px rgb(var(--rgb-secondary) / 0.10),
+    0 10px 22px rgb(var(--rgb-secondary) / 0.10),
     inset 0 1px 0 0 rgb(255 255 255 / 0.07),
     inset 4px 0 0 0 #ffc857;
   --shadow-card-accent-hover:
-    0 2px 4px rgb(var(--rgb-secondary) / 0.12),
-    0 10px 24px rgb(var(--rgb-secondary) / 0.16),
-    0 24px 56px rgb(var(--rgb-secondary) / 0.20),
+    0 4px 12px rgb(var(--rgb-secondary) / 0.14),
+    0 16px 30px rgb(var(--rgb-secondary) / 0.18),
     inset 0 1px 0 0 rgb(255 255 255 / 0.07),
     inset 4px 0 0 0 #ffc857;
 }
@@ -72,15 +72,13 @@
     0 0 0 1px rgb(244 246 248 / 0.07);
   --dropdown-divider: rgb(244 246 248 / 0.1);
   --shadow-card-accent:
-    0 1px 2px rgb(0 0 0 / 0.40),
-    0 4px 12px rgb(0 0 0 / 0.45),
-    0 14px 32px rgb(0 0 0 / 0.50),
+    0 2px 8px rgb(0 0 0 / 0.45),
+    0 10px 22px rgb(0 0 0 / 0.45),
     inset 0 1px 0 0 rgb(255 255 255 / 0.10),
     inset 4px 0 0 0 #ffc857;
   --shadow-card-accent-hover:
-    0 2px 4px rgb(0 0 0 / 0.45),
-    0 10px 24px rgb(0 0 0 / 0.55),
-    0 24px 56px rgb(0 0 0 / 0.60),
+    0 4px 12px rgb(0 0 0 / 0.55),
+    0 16px 32px rgb(0 0 0 / 0.55),
     inset 0 1px 0 0 rgb(255 255 255 / 0.13),
     inset 4px 0 0 0 #ffc857;
 }
@@ -263,4 +261,67 @@ html:not(.dark) .dropdown-panel .badge-ghosted { background: rgba(71, 85, 105, 0
     rgb(var(--rgb-secondary) / 0.06) 100%
   );
   background-size: 200% 100%;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Interaction polish — app-wide tactile feel.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Kill the grey flash on tap (mobile) and stray text selection on controls so
+   buttons feel like native, app-grade elements. */
+button,
+[role='button'],
+a,
+label,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+[role='button'] {
+  user-select: none;
+}
+
+/* `.press` — opt-in tactile press. Add to any clickable that isn't a
+   framer-motion element (those manage their own transform). Gives a springy
+   settle on hover/release and a quick squash on press. Declared after Tailwind
+   utilities so its :active reliably wins ties against `hover:scale-*`.
+   The card is intentionally NOT given `.press` — its click rect feeds the
+   card→modal morph, and scaling it would corrupt the captured origin. */
+@media (prefers-reduced-motion: no-preference) {
+  .press {
+    transition:
+      transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      background-color 200ms ease,
+      border-color 200ms ease,
+      color 200ms ease,
+      box-shadow 200ms ease,
+      filter 200ms ease,
+      opacity 200ms ease;
+  }
+  .press:active {
+    transform: scale(0.94);
+    transition-duration: 80ms;
+  }
+  .press:disabled,
+  .press[aria-disabled='true'] {
+    transform: none;
+  }
+}
+
+/* Smooth in-page scrolling (anchor jumps, scrollIntoView). */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Honor the OS "reduce motion" setting everywhere: collapse CSS animations and
+   transitions. framer-motion is handled separately via MotionConfig. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

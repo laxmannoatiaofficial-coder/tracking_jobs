@@ -56,7 +56,7 @@ const config: Config = {
         'modal-in': 'modal-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1) both',
         'backdrop-in': 'backdrop-in 160ms ease-out both',
         'grid-fade': 'grid-fade 180ms ease-out',
-        shimmer: 'shimmer 1.6s linear infinite',
+        shimmer: 'shimmer 2s ease-in-out infinite',
       },
       boxShadow: {
         card: '0 4px 20px rgb(var(--rgb-secondary) / 0.08)',

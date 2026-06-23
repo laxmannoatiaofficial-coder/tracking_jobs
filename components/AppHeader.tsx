@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, animate } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { useJobs } from '@/hooks/useJobs';
 import { useWatchlist } from '@/hooks/useWatchlist';
 import { daysUntilDate, daysSince } from '@/utils/helpers';
+import { popoverReveal } from '@/utils/motion';
 import { LogoMark } from './Logo';
 import { DeleteAccountModal } from './DeleteAccountModal';
 
@@ -17,6 +18,23 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Applications' },
   { href: '/watchlist', label: 'Watchlist' },
 ];
+
+// Each page mounts its own AppHeader, so the active-pill can't persist across
+// navigations via layoutId. Instead we remember the tab you left from (module
+// scope survives the remount) and slide the pill in from there on arrival.
+let lastNavPath: string | null = null;
+
+const PILL_SPRING = {
+  type: 'spring' as const,
+  stiffness: 360,
+  damping: 30,
+  mass: 0.8,
+};
+
+// useLayoutEffect on the client (positions the pill before paint), useEffect on
+// the server to avoid the SSR warning.
+const useIsoLayoutEffect =
+  typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 /**
  * Shared ribbon: brand, section navigation, theme toggle, and the account
@@ -33,6 +51,64 @@ export function AppHeader() {
   const [bellOpen, setBellOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const bellRef = useRef<HTMLDivElement>(null);
+
+  // Sliding active-tab pill geometry.
+  const navRef = useRef<HTMLElement>(null);
+  const itemRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
+  const pillX = useMotionValue(0);
+  const pillW = useMotionValue(0);
+  const [pillReady, setPillReady] = useState(false);
+
+  // Position the pill under the active tab; slide it in from the previous tab.
+  useIsoLayoutEffect(() => {
+    const nav = navRef.current;
+    const activeEl = itemRefs.current[pathname];
+    if (!nav || !activeEl) return;
+    const navRect = nav.getBoundingClientRect();
+    const measure = (el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      return { left: r.left - navRect.left + nav.scrollLeft, width: r.width };
+    };
+    const target = measure(activeEl);
+    const fromEl =
+      lastNavPath && lastNavPath !== pathname
+        ? itemRefs.current[lastNavPath]
+        : null;
+    lastNavPath = pathname;
+
+    if (fromEl) {
+      const from = measure(fromEl);
+      pillX.set(from.left);
+      pillW.set(from.width);
+      setPillReady(true);
+      const ax = animate(pillX, target.left, PILL_SPRING);
+      const aw = animate(pillW, target.width, PILL_SPRING);
+      return () => {
+        ax.stop();
+        aw.stop();
+      };
+    }
+
+    // No previous tab (fresh load / deep link): just place it.
+    pillX.set(target.left);
+    pillW.set(target.width);
+    setPillReady(true);
+  }, [pathname]);
+
+  // Keep the pill aligned to the active tab on viewport resize.
+  useEffect(() => {
+    const onResize = () => {
+      const nav = navRef.current;
+      const activeEl = itemRefs.current[pathname];
+      if (!nav || !activeEl) return;
+      const navRect = nav.getBoundingClientRect();
+      const r = activeEl.getBoundingClientRect();
+      pillX.set(r.left - navRect.left + nav.scrollLeft);
+      pillW.set(r.width);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [pathname, pillX, pillW]);
 
   // Bell reminders, two kinds merged:
   //  1. Follow-ups that are overdue / due today / due tomorrow (not done).
@@ -179,17 +255,29 @@ export function AppHeader() {
             on desktop it switches to visible. The px-2/-mx-2 "bleed" widens the
             clip box by 8px on each side without shifting layout, so the outline
             and hover-scale of the flush first & last items are never clipped. */}
-        <nav className="order-last w-full sm:order-none sm:w-auto flex items-center gap-4 px-2 -mx-2 overflow-x-auto sm:overflow-x-visible [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <nav
+          ref={navRef}
+          className="relative order-last w-full sm:order-none sm:w-auto flex items-center gap-4 px-2 -mx-2 overflow-x-auto sm:overflow-x-visible [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+        >
+          {/* The yellow active-tab pill — slides between tabs on navigation. */}
+          <motion.span
+            aria-hidden="true"
+            className="absolute top-1/2 left-0 z-0 h-8 rounded-full bg-accent pointer-events-none"
+            style={{ x: pillX, width: pillW, y: '-50%', opacity: pillReady ? 1 : 0 }}
+          />
           {NAV_ITEMS.map((item) => {
             const active = pathname === item.href;
             return (
               <Link
                 key={item.href}
+                ref={(el) => {
+                  itemRefs.current[item.href] = el;
+                }}
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
-                className={`group relative whitespace-nowrap h-8 flex items-center px-3.5 text-sm transition-all duration-300 ease-out ${
+                className={`press group relative z-10 whitespace-nowrap h-8 flex items-center px-3.5 text-sm rounded-full ${
                   active
-                    ? 'bg-accent rounded-full font-semibold text-[#2d3a3a]'
+                    ? 'font-semibold text-[#2d3a3a]'
                     : 'font-medium text-[rgb(var(--rgb-on-dark))] hover:text-accent hover:scale-[1.04]'
                 }`}
               >
@@ -236,7 +324,7 @@ export function AppHeader() {
                   : 'Reminders'
               }
               title="Reminders"
-              className="group relative flex items-center justify-center w-9 h-9 rounded-full text-primary transition-all duration-200 ease-out hover:scale-110"
+              className="press group relative flex items-center justify-center w-9 h-9 rounded-full text-primary hover:scale-110"
             >
               <BellIcon />
               {totalCount > 0 && (
@@ -251,19 +339,10 @@ export function AppHeader() {
             <AnimatePresence>
               {bellOpen && (
                 <motion.div
-                  initial={{ scaleY: 0, opacity: 0.6 }}
-                  animate={{ scaleY: 1, opacity: 1 }}
-                  exit={{
-                    scaleY: 0,
-                    opacity: 0,
-                    transition: { duration: 0.14, ease: 'easeIn' },
-                  }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 380,
-                    damping: 28,
-                    mass: 0.7,
-                  }}
+                  variants={popoverReveal}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
                   role="menu"
                   className="dropdown-panel absolute right-0 mt-2 w-[290px] rounded-xl overflow-hidden z-50"
                   style={{ transformOrigin: 'top right' }}
@@ -293,7 +372,7 @@ export function AppHeader() {
                           type="button"
                           role="menuitem"
                           onClick={r.onOpen}
-                          className="w-full text-left px-4 py-2.5 transition-colors hover:bg-accent/15 flex items-center justify-between gap-3"
+                          className="w-full text-left px-4 py-2.5 transition-colors hover:bg-accent/15 active:bg-accent/30 flex items-center justify-between gap-3"
                         >
                           <span className="min-w-0">
                             <span className="block text-sm font-semibold text-secondary truncate">
@@ -329,26 +408,17 @@ export function AppHeader() {
               aria-expanded={menuOpen}
               aria-label={`Account menu (${userLabel})`}
               title={userLabel}
-              className="flex items-center justify-center w-9 h-9 rounded-full text-sm font-semibold text-[rgb(var(--rgb-on-dark))] border border-accent hover:bg-accent hover:text-[#2d3a3a] transition-all duration-200 ease-out hover:scale-110"
+              className="press flex items-center justify-center w-9 h-9 rounded-full text-sm font-semibold text-[rgb(var(--rgb-on-dark))] border border-accent hover:bg-accent hover:text-[#2d3a3a] hover:scale-110"
             >
               {userInitial}
             </button>
             <AnimatePresence>
               {menuOpen && (
                 <motion.div
-                  initial={{ scaleY: 0, opacity: 0.6 }}
-                  animate={{ scaleY: 1, opacity: 1 }}
-                  exit={{
-                    scaleY: 0,
-                    opacity: 0,
-                    transition: { duration: 0.14, ease: 'easeIn' },
-                  }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 380,
-                    damping: 28,
-                    mass: 0.7,
-                  }}
+                  variants={popoverReveal}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
                   role="menu"
                   className="dropdown-panel absolute right-0 mt-2 min-w-[200px] rounded-xl overflow-hidden z-50"
                   style={{ transformOrigin: 'top right' }}
@@ -435,7 +505,7 @@ function MenuItem({
       type="button"
       role="menuitem"
       onClick={onClick}
-      className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent/20 ${
+      className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent/20 active:bg-accent/30 ${
         tone === 'danger' ? '' : 'text-secondary'
       }`}
       style={tone === 'danger' ? { color: '#dc2626' } : undefined}

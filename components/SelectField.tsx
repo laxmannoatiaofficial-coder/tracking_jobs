@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { popoverReveal } from '@/utils/motion';
 
 export interface SelectOption<T extends string = string> {
   value: T;
@@ -47,7 +48,10 @@ export function SelectField<T extends string>({
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
   const [pos, setPos] = useState<PanelPos | null>(null);
-  const [mounted, setMounted] = useState(false);
+  // True from the first client render (the portal only renders once `pos` is
+  // set on open, so this never mismatches SSR). Avoids a wasted re-render per
+  // dropdown on mount — and there are several in the edit form.
+  const [mounted] = useState(() => typeof window !== 'undefined');
 
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -55,10 +59,6 @@ export function SelectField<T extends string>({
   const listId = useId();
 
   const selected = options.find((o) => o.value === value);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const updatePos = useCallback(() => {
     if (!triggerRef.current) return;
@@ -171,7 +171,7 @@ export function SelectField<T extends string>({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
-        className={`${triggerClass} form-field cursor-pointer text-left flex items-center justify-between gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
+        className={`${triggerClass} press form-field cursor-pointer text-left flex items-center justify-between gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         <span className="min-w-0">
           <span className="block truncate">{selected?.label ?? value}</span>
@@ -194,10 +194,10 @@ export function SelectField<T extends string>({
           <AnimatePresence>
             {open && (
               <motion.div
-                initial={{ scaleY: 0, opacity: 0.6 }}
-                animate={{ scaleY: 1, opacity: 1 }}
-                exit={{ scaleY: 0, opacity: 0, transition: { duration: 0.14, ease: 'easeIn' } }}
-                transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.7 }}
+                variants={popoverReveal}
+                initial="initial"
+                animate="animate"
+                exit="exit"
                 id={listId}
                 ref={panelRef as any}
                 role="listbox"
@@ -230,7 +230,7 @@ export function SelectField<T extends string>({
                       aria-selected={isSelected}
                       onClick={() => choose(opt.value)}
                       onMouseEnter={() => setHighlight(idx)}
-                      className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left text-sm transition-colors ${
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left text-sm transition-colors active:bg-accent/40 ${
                         isActive ? 'bg-accent/30' : 'hover:bg-accent/15'
                       }`}
                       style={{ color: 'var(--color-ink)' }}

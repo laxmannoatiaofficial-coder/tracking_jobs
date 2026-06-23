@@ -120,7 +120,7 @@ export function AddCompanyModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110 transition-all duration-200 ease-out"
+            className="press p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path
@@ -148,7 +148,7 @@ export function AddCompanyModal({
                 role="radio"
                 aria-checked={form.kind === k}
                 onClick={() => set('kind', k)}
-                className={`py-1.5 rounded-full text-sm transition-all duration-200 ease-out ${
+                className={`press py-1.5 rounded-full text-sm ${
                   form.kind === k
                     ? 'bg-accent font-semibold text-[#2d3a3a]'
                     : 'font-medium text-secondary hover:bg-accent/15'
@@ -254,7 +254,7 @@ export function AddCompanyModal({
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 rounded-full text-sm font-semibold border border-[rgb(var(--rgb-secondary)_/_0.4)] hover:border-accent hover:scale-[1.05] transition-all duration-200 ease-out disabled:opacity-50 disabled:hover:scale-100"
+            className="press px-4 py-2 rounded-full text-sm font-semibold border border-[rgb(var(--rgb-secondary)_/_0.4)] hover:border-accent hover:scale-[1.05] disabled:opacity-50 disabled:hover:scale-100"
             style={{ color: 'var(--color-ink)' }}
           >
             Cancel
@@ -262,7 +262,7 @@ export function AddCompanyModal({
           <button
             type="submit"
             disabled={!isValid || saving}
-            className="px-5 py-2 rounded-full text-sm font-semibold bg-accent text-secondary transition-all duration-200 ease-out hover:scale-[1.03] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+            className="press px-5 py-2 rounded-full text-sm font-semibold bg-accent text-secondary hover:scale-[1.03] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>

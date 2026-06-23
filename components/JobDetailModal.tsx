@@ -8,6 +8,12 @@ import {
   formatLocation,
   getFollowUpState,
 } from '@/utils/helpers';
+import {
+  draftFollowUp,
+  interviewPrep,
+  type FollowUpDraft,
+  type InterviewPrep,
+} from '@/utils/ai';
 import { Modal } from './Modal';
 import { StatusBadge } from './StatusBadge';
 
@@ -43,6 +49,24 @@ export function JobDetailModal({
   const [jdExpanded, setJdExpanded] = useState(false);
   const jdSectionRef = useRef<HTMLDivElement>(null);
 
+  // AI Assist state.
+  const [followUpResult, setFollowUpResult] = useState<FollowUpDraft | null>(
+    null,
+  );
+  const [prepResult, setPrepResult] = useState<InterviewPrep | null>(null);
+  const [aiBusy, setAiBusy] = useState<'follow-up' | 'prep' | null>(null);
+  const [aiError, setAiError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  // Clear AI results when the modal switches to a different application.
+  const jobId = displayJob?.id;
+  useEffect(() => {
+    setFollowUpResult(null);
+    setPrepResult(null);
+    setAiError('');
+    setCopied(false);
+  }, [jobId]);
+
   useEffect(() => {
     if (!open) return;
     if (focusJd && displayJob?.jd_text) {
@@ -67,6 +91,46 @@ export function JobDetailModal({
       : followUp === 'today'
         ? '#d97706'
         : 'rgb(var(--rgb-secondary) / 0.75)';
+
+  const runFollowUp = async () => {
+    if (aiBusy) return;
+    setAiBusy('follow-up');
+    setAiError('');
+    setFollowUpResult(null);
+    try {
+      setFollowUpResult(await draftFollowUp(displayJob));
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Request failed');
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
+  const runPrep = async () => {
+    if (aiBusy) return;
+    setAiBusy('prep');
+    setAiError('');
+    setPrepResult(null);
+    try {
+      setPrepResult(await interviewPrep(displayJob));
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Request failed');
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
+  const copyFollowUp = () => {
+    if (!followUpResult) return;
+    const text = `Subject: ${followUpResult.subject}\n\n${followUpResult.body}`;
+    navigator.clipboard
+      ?.writeText(text)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
+  };
 
   return (
     <Modal
@@ -102,7 +166,7 @@ export function JobDetailModal({
             onClick={onEdit}
             aria-label="Edit application"
             title="Edit"
-            className="p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110 transition-all duration-200 ease-out"
+            className="press p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110"
           >
             <PencilIcon />
           </button>
@@ -111,7 +175,7 @@ export function JobDetailModal({
             onClick={onClose}
             aria-label="Close"
             title="Close"
-            className="p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110 transition-all duration-200 ease-out"
+            className="press p-2 rounded-full border border-transparent hover:border-accent hover:bg-accent/25 hover:scale-110"
           >
             <CloseIcon />
           </button>
@@ -146,7 +210,7 @@ export function JobDetailModal({
                       onClick={() =>
                         onFollowUpToggle(displayJob.id, false)
                       }
-                      className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-[rgb(var(--rgb-secondary)_/_0.35)] text-[color:var(--color-ink)] hover:border-accent hover:scale-[1.05] transition-all duration-200 ease-out"
+                      className="press text-xs font-semibold px-2.5 py-0.5 rounded-full border border-[rgb(var(--rgb-secondary)_/_0.35)] text-[color:var(--color-ink)] hover:border-accent hover:scale-[1.05]"
                     >
                       Undo
                     </button>
@@ -170,7 +234,7 @@ export function JobDetailModal({
                       onClick={() =>
                         onFollowUpToggle(displayJob.id, true)
                       }
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white hover:scale-[1.05] transition-all duration-200 ease-out"
+                      className="press inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white hover:scale-[1.05]"
                     >
                       <CheckIcon />
                       Mark as done
@@ -188,7 +252,7 @@ export function JobDetailModal({
                   href={displayJob.jd_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block font-semibold text-secondary underline decoration-accent decoration-2 underline-offset-4 hover:text-accent hover:scale-[1.03] transition-all duration-200 ease-out break-all origin-left"
+                  className="press inline-block font-semibold text-secondary underline decoration-accent decoration-2 underline-offset-4 hover:text-accent hover:scale-[1.03] break-all origin-left"
                 >
                   View Job Description →
                 </a>
@@ -203,7 +267,7 @@ export function JobDetailModal({
                   href={displayJob.resume_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block font-semibold text-secondary underline decoration-accent decoration-2 underline-offset-4 hover:text-accent hover:scale-[1.03] transition-all duration-200 ease-out break-all origin-left"
+                  className="press inline-block font-semibold text-secondary underline decoration-accent decoration-2 underline-offset-4 hover:text-accent hover:scale-[1.03] break-all origin-left"
                 >
                   {displayJob.resume_file_name
                     ? `Download Resume (${displayJob.resume_file_name})`
@@ -226,7 +290,7 @@ export function JobDetailModal({
               <button
                 type="button"
                 onClick={() => setJdExpanded((v) => !v)}
-                className="inline-block text-xs font-semibold underline decoration-accent decoration-2 underline-offset-4 hover:text-accent hover:scale-[1.05] transition-all duration-200 ease-out"
+                className="press inline-block text-xs font-semibold underline decoration-accent decoration-2 underline-offset-4 hover:text-accent hover:scale-[1.05]"
                 aria-expanded={jdExpanded}
               >
                 {jdExpanded ? 'Show less' : 'Show more'}
@@ -267,6 +331,100 @@ export function JobDetailModal({
             </div>
           </div>
         )}
+
+        {/* AI Assist — follow-up draft + interview prep */}
+        <div className="mt-6">
+          <h3
+            className="text-xs uppercase tracking-wider mb-2 font-semibold"
+            style={{ color: 'rgb(var(--rgb-ink) / 0.55)' }}
+          >
+            AI Assist
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={runFollowUp}
+              disabled={aiBusy !== null}
+              className="press inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold bg-accent text-secondary hover:scale-[1.03] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
+              {aiBusy === 'follow-up' && <AiSpinner />}
+              ✨ Draft follow-up
+            </button>
+            <button
+              type="button"
+              onClick={runPrep}
+              disabled={aiBusy !== null}
+              className="press inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border border-[rgb(var(--rgb-secondary)_/_0.4)] hover:border-accent hover:scale-[1.03] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+              style={{ color: 'var(--color-ink)' }}
+            >
+              {aiBusy === 'prep' && <AiSpinner />}
+              ✨ Interview prep
+            </button>
+          </div>
+          {aiError && (
+            <p className="text-xs mt-2" style={{ color: '#dc2626' }}>
+              {aiError}
+            </p>
+          )}
+
+          {followUpResult && (
+            <div
+              className="mt-3 p-4 rounded-2xl text-sm"
+              style={{ background: 'rgb(var(--rgb-secondary) / 0.05)' }}
+            >
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="font-semibold text-secondary">
+                  Follow-up email
+                </span>
+                <button
+                  type="button"
+                  onClick={copyFollowUp}
+                  className="press text-xs font-semibold px-2.5 py-1 rounded-full border border-[rgb(var(--rgb-secondary)_/_0.35)] hover:border-accent"
+                  style={{ color: 'var(--color-ink)' }}
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <p className="font-semibold text-secondary">
+                {followUpResult.subject}
+              </p>
+              <p
+                className="text-secondary whitespace-pre-wrap mt-1"
+                style={{ overflowWrap: 'anywhere' }}
+              >
+                {followUpResult.body}
+              </p>
+            </div>
+          )}
+
+          {prepResult && (
+            <div
+              className="mt-3 p-4 rounded-2xl text-sm text-secondary"
+              style={{ background: 'rgb(var(--rgb-secondary) / 0.05)' }}
+            >
+              {prepResult.questions.length > 0 && (
+                <>
+                  <p className="font-semibold mb-1">Likely questions</p>
+                  <ol className="list-decimal pl-5 space-y-1 mb-3">
+                    {prepResult.questions.map((q, i) => (
+                      <li key={i}>{q}</li>
+                    ))}
+                  </ol>
+                </>
+              )}
+              {prepResult.talking_points.length > 0 && (
+                <>
+                  <p className="font-semibold mb-1">Talking points</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {prepResult.talking_points.map((t, i) => (
+                      <li key={i}>{t}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <footer
@@ -276,7 +434,7 @@ export function JobDetailModal({
         <button
           type="button"
           onClick={onDelete}
-          className="px-4 py-2 rounded-full text-sm font-semibold border border-[#dc2626] hover:border-accent hover:scale-[1.05] transition-all duration-200 ease-out"
+          className="press px-4 py-2 rounded-full text-sm font-semibold border border-[#dc2626] hover:border-accent hover:scale-[1.05]"
           style={{ color: '#dc2626' }}
         >
           Delete
@@ -284,7 +442,7 @@ export function JobDetailModal({
         <button
           type="button"
           onClick={onEdit}
-          className="px-5 py-2 rounded-full text-sm font-semibold bg-accent text-secondary transition-all duration-200 ease-out hover:scale-[1.03]"
+          className="press px-5 py-2 rounded-full text-sm font-semibold bg-accent text-secondary hover:scale-[1.03]"
         >
           Edit
         </button>
@@ -310,6 +468,19 @@ function Row({
       </dt>
       <dd className="text-secondary break-words">{value}</dd>
     </>
+  );
+}
+
+function AiSpinner() {
+  return (
+    <span
+      className="inline-block w-3.5 h-3.5 rounded-full animate-spin"
+      style={{
+        border: '2px solid rgb(var(--rgb-secondary) / 0.3)',
+        borderTopColor: 'var(--color-secondary)',
+      }}
+      aria-hidden="true"
+    />
   );
 }
 

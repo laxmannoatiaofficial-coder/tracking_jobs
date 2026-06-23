@@ -19,9 +19,11 @@ interface ModalProps {
 }
 
 // Smooth decelerating grow on open (no spring bounce, so it reads as the card
-// continuously morphing into the modal). Close mirrors it with an ease-in.
-const ZOOM_OPEN = { duration: 0.34, ease: [0.16, 1, 0.3, 1] as const };
-const ZOOM_CLOSE = { duration: 0.26, ease: [0.4, 0, 1, 1] as const };
+// continuously morphing into the modal). Close mirrors it with a quick ease-in.
+// Tuned snappy: a fast expo-out open and an even quicker accelerating close so
+// the panel never lingers — important when one modal swaps straight to another.
+const ZOOM_OPEN = { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const };
+const ZOOM_CLOSE = { duration: 0.14, ease: [0.4, 0, 1, 1] as const };
 
 export function Modal({
   open,
@@ -59,9 +61,9 @@ export function Modal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="absolute inset-0 backdrop-blur-sm"
-            style={{ background: 'rgb(var(--rgb-secondary) / 0.7)' }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+            className="absolute inset-0"
+            style={{ background: 'rgb(var(--rgb-secondary) / 0.78)' }}
             onMouseDown={onClose}
             aria-hidden="true"
           />
@@ -73,10 +75,10 @@ export function Modal({
           ) : (
             /* Regular scale-up path (no origin element) */
             <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              transition={{ duration: 0.25, type: 'spring', bounce: 0.1 }}
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
               className={`relative w-full ${widthClass} max-h-[92vh] sm:max-h-[90vh] bg-primary rounded-t-3xl sm:rounded-3xl flex flex-col shadow-modal overflow-hidden`}
               style={{ border: '1px solid rgba(255, 200, 87, 0.7)', borderRadius: 24 }}
               onMouseDown={(e) => e.stopPropagation()}
@@ -180,8 +182,8 @@ function ZoomPanel({
       >
         <motion.div
           initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { duration: 0.2, delay: 0.12 } }}
-          exit={{ opacity: 0, transition: { duration: 0.1, ease: 'easeIn' } }}
+          animate={{ opacity: 1, transition: { duration: 0.14, delay: 0.05 } }}
+          exit={{ opacity: 0, transition: { duration: 0.08, ease: 'easeIn' } }}
           className="flex flex-col flex-1 min-h-0"
         >
           {children}

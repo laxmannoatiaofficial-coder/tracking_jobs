@@ -47,7 +47,7 @@ export function DeleteConfirmModal({
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 rounded-full text-sm font-semibold border border-[rgb(var(--rgb-secondary)_/_0.4)] hover:border-accent hover:scale-[1.05] transition-all duration-200 ease-out"
+            className="press px-4 py-2 rounded-full text-sm font-semibold border border-[rgb(var(--rgb-secondary)_/_0.4)] hover:border-accent hover:scale-[1.05]"
             style={{ color: 'var(--color-ink)' }}
           >
             Cancel
@@ -55,7 +55,7 @@ export function DeleteConfirmModal({
           <button
             type="button"
             onClick={onConfirm}
-            className="px-4 py-2 rounded-full text-sm font-semibold text-white border border-transparent hover:border-accent hover:opacity-90 hover:scale-[1.05] transition-all duration-200 ease-out"
+            className="press px-4 py-2 rounded-full text-sm font-semibold text-white border border-transparent hover:border-accent hover:opacity-90 hover:scale-[1.05]"
             style={{ background: '#dc2626' }}
           >
             Delete
